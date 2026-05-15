@@ -654,7 +654,9 @@ export const usePrint = () => {
     // main loop can find them on the correct page. Fixed elements (QR, images, etc.)
     // are intentionally left in place until the current element's entire split chain
     // terminates (flowOnly=false), guaranteeing strict serial Y-axis order.
-    const syncElementsBelowTables = (flowOnly = false) => {
+    // freezeFlow=true: keep flow wrappers fixed in this pass (used by the final sync after
+    // the pagination loop to avoid moving flow chunks without a subsequent split pass).
+    const syncElementsBelowTables = (flowOnly = false, freezeFlow = false) => {
       let workingPages = Array.from(container.children).filter(el => !['STYLE', 'LINK', 'SCRIPT'].includes(el.tagName)) as HTMLElement[];
       if (workingPages.length === 0) return;
 
@@ -743,6 +745,10 @@ export const usePrint = () => {
             return;
           }
 
+          if (freezeFlow && wrapper.hasAttribute('data-flow-id')) {
+            return;
+          }
+
           const tableEntries = tableEntriesByOrigin.get(originPage);
           const originalTop = parseAttrNumber(wrapper, 'data-original-top', parseFloat(wrapper.style.top || '') || 0);
           const originalHeight = parseAttrNumber(wrapper, 'data-original-height', wrapper.getBoundingClientRect().height);
@@ -796,8 +802,9 @@ export const usePrint = () => {
           const minContentTop = copyHeader && headerHeight > 0 ? (headerHeight + marginTop) : marginTop;
           const maxContentBottom = pageHeight - (copyFooter ? footerHeight : 0) - marginBottom;
           const availableContentHeight = maxContentBottom - minContentTop;
+          const isFlowWrapper = wrapper.hasAttribute('data-flow-id');
           const wrapperRectHeight = wrapper.getBoundingClientRect().height;
-          const wrapperHeight = wrapper.hasAttribute('data-flow-id')
+          const wrapperHeight = isFlowWrapper
             ? wrapperRectHeight
             : parseAttrNumber(wrapper, 'data-original-height', wrapperRectHeight);
 
@@ -806,7 +813,14 @@ export const usePrint = () => {
               targetTop = minContentTop;
             }
 
-            if (wrapperHeight <= availableContentHeight && targetTop + wrapperHeight > maxContentBottom) {
+            if (isFlowWrapper) {
+              // Flow wrappers (auto-height text/table) are allowed to start on this page and
+              // continue splitting across pages. Only move if start point is already in footer area.
+              if (targetTop >= maxContentBottom - 0.5) {
+                targetPageIndex += 1;
+                targetTop = minContentTop;
+              }
+            } else if (wrapperHeight <= availableContentHeight && targetTop + wrapperHeight > maxContentBottom) {
               targetPageIndex += 1;
               targetTop = minContentTop;
             } else if (wrapperHeight > availableContentHeight) {
@@ -844,13 +858,15 @@ export const usePrint = () => {
           }
 
           const finalGlobalTop = targetPageIndex * pageHeight + targetTop;
-          const flowEntry = wrapper.hasAttribute('data-flow-id')
+          const flowEntry = isFlowWrapper
             ? tableEntries?.find(item => Math.abs(item.originalBottom - originalBottom) < 0.5)
             : null;
-          const finalGlobalBottom = flowEntry ? flowEntry.finalGlobalBottom : finalGlobalTop + wrapperHeight;
-
-          previousOriginalBottom = originalBottom;
-          previousFinalGlobalBottom = finalGlobalBottom;
+          const hasReliableSerialBottom = !isFlowWrapper || !!flowEntry;
+          if (hasReliableSerialBottom) {
+            const finalGlobalBottom = flowEntry ? flowEntry.finalGlobalBottom : finalGlobalTop + wrapperHeight;
+            previousOriginalBottom = originalBottom;
+            previousFinalGlobalBottom = finalGlobalBottom;
+          }
         });
       });
 
@@ -937,6 +953,89 @@ export const usePrint = () => {
       textEl.textContent = fullText;
       return best;
     };
+
+    const markOverflowedPaginatedFlows = () => {
+      let repaired = 0;
+      pages = Array.from(container.children).filter(el => !['STYLE', 'LINK', 'SCRIPT'].includes(el.tagName)) as HTMLElement[];
+
+      pages.forEach(page => {
+        const pageRect = page.getBoundingClientRect();
+        const marginBottom = store.pageSpacingY || 0;
+        const effectiveFooterHeight = copyFooter ? footerHeight : 0;
+        const limitBottom = pageRect.top + pageHeight - effectiveFooterHeight - marginBottom;
+        const wrappers = Array.from(page.querySelectorAll('[data-print-wrapper][data-flow-id][data-flow-paginated]')) as HTMLElement[];
+
+        wrappers.forEach(wrapper => {
+          const flowKind = getFlowKind(wrapper);
+          const table = wrapper.querySelector('table') as HTMLElement | null;
+          const autoHeightEl = resolveAutoHeightContentEl(wrapper);
+          const isAutoHeight = flowKind === 'auto-height' || (!table && !!autoHeightEl);
+
+          if (!table && !autoHeightEl) return;
+
+          if (table && !isAutoHeight) {
+            const autoPaginate = table.getAttribute('data-auto-paginate') === 'true';
+            if (!autoPaginate) return;
+          }
+
+          const contentRect = (table || autoHeightEl)!.getBoundingClientRect();
+          if (contentRect.bottom > limitBottom + 1) {
+            wrapper.removeAttribute('data-flow-paginated');
+            repaired += 1;
+          }
+        });
+      });
+
+      return repaired;
+    };
+
+    const countPendingFlowWrappers = () => {
+      let pending = 0;
+      pages = Array.from(container.children).filter(el => !['STYLE', 'LINK', 'SCRIPT'].includes(el.tagName)) as HTMLElement[];
+
+      pages.forEach(page => {
+        const wrappers = Array.from(page.querySelectorAll('[data-print-wrapper][data-flow-id]:not([data-flow-paginated])')) as HTMLElement[];
+
+        wrappers.forEach(wrapper => {
+          if (wrapper.getAttribute('data-repeat-per-page') === 'true') return;
+
+          const flowKind = getFlowKind(wrapper);
+          const table = wrapper.querySelector('table') as HTMLElement | null;
+          const autoHeightEl = resolveAutoHeightContentEl(wrapper);
+          const isAutoHeight = flowKind === 'auto-height' || (!table && !!autoHeightEl);
+
+          if (!table && !autoHeightEl) return;
+
+          if (table && !isAutoHeight) {
+            const autoPaginate = table.getAttribute('data-auto-paginate') === 'true';
+            if (!autoPaginate) return;
+          }
+
+          // Keep convergence finite: skip rotated/skewed wrappers because pagination intentionally
+          // does not process them in runFlowPaginationPass.
+          const transform = window.getComputedStyle(wrapper).transform;
+          if (transform && transform !== 'none') {
+            if (!transform.startsWith('matrix')) {
+              return;
+            }
+            const values = transform.substring(7, transform.length - 1).split(',');
+            if (values.length >= 4) {
+              const b = parseFloat(values[1]);
+              const c = parseFloat(values[2]);
+              if (Math.abs(b) > 0.001 || Math.abs(c) > 0.001) {
+                return;
+              }
+            }
+          }
+
+          pending += 1;
+        });
+      });
+
+      return pending;
+    };
+
+    const runFlowPaginationPass = () => {
     
     for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
@@ -1205,8 +1304,21 @@ export const usePrint = () => {
              }
         });
     }
+    };
 
-    syncElementsBelowTables();
+    const maxPaginationPasses = 60;
+    for (let pass = 0; pass < maxPaginationPasses; pass++) {
+      runFlowPaginationPass();
+      const repairedCount = markOverflowedPaginatedFlows();
+      const pendingCount = countPendingFlowWrappers();
+      if (repairedCount === 0 && pendingCount === 0) {
+        break;
+      }
+    }
+
+    // Final settle: adjust fixed elements against finalized flow results, but do not move
+    // flow wrappers here because there is no further pagination loop after this call.
+    syncElementsBelowTables(false, true);
     
     // Clean up any empty pages that might have been created during pagination shifts
     pages = Array.from(container.children).filter(el => !['STYLE', 'LINK', 'SCRIPT'].includes(el.tagName)) as HTMLElement[];
