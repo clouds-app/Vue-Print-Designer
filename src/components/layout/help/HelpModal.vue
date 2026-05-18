@@ -78,8 +78,8 @@ const projectName = startCase(pkg.name);
       >
         <!-- Sidebar Tabs -->
         <div class="w-48 bg-gray-50 border-r border-gray-200 flex flex-col">
-          <div class="h-[60px] flex items-center px-4 border-b border-gray-200">
-            <h3 class="text-lg font-semibold text-gray-800">
+          <div class="h-14 flex items-center px-4 border-b border-gray-200">
+            <h3 class="text-base font-semibold text-gray-800">
               {{ t("help.title") }}
             </h3>
           </div>
@@ -114,9 +114,9 @@ const projectName = startCase(pkg.name);
         <!-- Content Area -->
         <div class="flex-1 flex flex-col min-w-0">
           <div
-            class="h-[60px] flex items-center justify-between px-4 border-b border-gray-200"
+            class="h-14 flex items-center justify-between px-4 border-b border-gray-200"
           >
-            <h3 class="text-lg font-semibold text-gray-800">
+            <h3 class="text-base font-semibold text-gray-800">
               {{
                 activeTab === "shortcuts"
                   ? t("shortcuts.keyboardShortcuts")

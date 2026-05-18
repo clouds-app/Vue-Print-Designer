@@ -25,6 +25,8 @@ export default {
     rotate: "旋转",
     lock: "锁定",
     unlock: "解锁",
+    collapse: "折叠",
+    expand: "展开",
     appTitle: "打印设计器",
     testData: "测试数据",
     invalidJson: "JSON 无效，未保存更改。",

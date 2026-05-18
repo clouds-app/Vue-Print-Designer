@@ -528,28 +528,31 @@ const handleFocusOut = (e: FocusEvent) => {
 
 <template>
   <aside
-    class="w-[380px] bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex flex-col h-full z-40 overflow-hidden"
+    class="w-full bg-white dark:bg-gray-900 flex flex-col h-full z-40 overflow-hidden"
     @focusin="handleFocusIn"
     @focusout="handleFocusOut"
   >
     <!-- Header -->
     <div
-      class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between"
+      class="p-4 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between cursor-move select-none"
+      data-floating-panel-drag-handle="true"
     >
       <div>
-        <h2 class="font-semibold text-gray-700 dark:text-gray-200">
+        <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
           {{ t("properties.title") }}
         </h2>
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
           {{ t("properties.subtitle") }}
         </p>
       </div>
-      <div
-        v-if="isLocked"
-        class="flex items-center text-red-500 dark:text-red-400 gap-1 text-xs font-medium bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded border border-red-100 dark:border-red-800"
-      >
-        <Lock class="w-3 h-3" />
-        <span>{{ t("properties.locked") }}</span>
+      <div class="flex items-center gap-2">
+        <div
+          v-if="isLocked"
+          class="flex items-center text-red-500 dark:text-red-400 gap-1 text-xs font-medium bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded border border-red-100 dark:border-red-800"
+        >
+          <Lock class="w-3 h-3" />
+          <span>{{ t("properties.locked") }}</span>
+        </div>
       </div>
     </div>
 

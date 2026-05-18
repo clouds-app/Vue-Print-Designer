@@ -327,9 +327,9 @@ onUnmounted(() => {
         class="bg-white rounded-lg shadow-xl w-[700px] max-w-full max-h-[90vh] flex flex-col overflow-hidden"
       >
         <div
-          class="h-[56px] flex items-center justify-between px-4 border-b border-gray-200"
+          class="h-[52px] flex items-center justify-between px-4 border-b border-gray-200"
         >
-          <h3 class="text-lg font-semibold text-gray-800">{{ modeTitle }}</h3>
+          <h3 class="text-base font-semibold text-gray-800">{{ modeTitle }}</h3>
           <button
             @click="close"
             class="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
@@ -593,17 +593,17 @@ onUnmounted(() => {
         </div>
 
         <div
-          class="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 rounded-b-lg"
+          class="p-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2.5 rounded-b-lg"
         >
           <button
             @click="close"
-            class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 text-sm text-gray-700"
+            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700"
           >
             {{ t("common.close") }}
           </button>
           <button
             @click="confirm"
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+            class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs"
           >
             {{ t("printDialog.confirm") }}
           </button>

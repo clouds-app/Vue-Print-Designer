@@ -25,6 +25,8 @@ export default {
     rotate: "Rotate",
     lock: "Lock",
     unlock: "Unlock",
+    collapse: "Collapse",
+    expand: "Expand",
     appTitle: "Print Designer",
     testData: "Test Data",
     invalidJson: "Invalid JSON. Changes were not saved.",

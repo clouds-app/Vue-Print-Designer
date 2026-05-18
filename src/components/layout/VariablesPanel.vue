@@ -14,9 +14,19 @@ const store = useDesignerStore();
 
 const panelRef = ref<HTMLElement | null>(null);
 const isDragging = ref(false);
+const isResizing = ref(false);
 const startPos = ref({ x: 0, y: 0 });
+const resizeStart = ref({ x: 0, y: 0, width: 280, height: 360 });
 const panelPos = ref({ x: -9999, y: -9999 }); // Default off-screen until watch calculates it
-const maxPanelHeight = ref<string>("70vh");
+const panelSize = ref({ width: 280, height: 360 });
+const PANEL_MIN_WIDTH = 220;
+const PANEL_MAX_WIDTH = 520;
+const PANEL_MIN_HEIGHT = 200;
+const PANEL_Z_BASE = 2000;
+const PANEL_Z_ACTIVE = 5100;
+const panelZIndex = computed(() =>
+  isDragging.value || isResizing.value ? PANEL_Z_ACTIVE : PANEL_Z_BASE,
+);
 
 const variables = computed(() => store.availableVariables || []);
 
@@ -36,9 +46,36 @@ const toggleExpand = (id: string) => {
   });
 };
 
-// Handle dragging the panel itself
+const getCanvasBounds = () => {
+  const root =
+    (panelRef.value?.getRootNode() as Document | ShadowRoot) || document;
+  const canvasScroll = root.querySelector(".canvas-scroll") as HTMLElement | null;
+  if (!canvasScroll) return null;
+  return canvasScroll.getBoundingClientRect();
+};
+
+const clampPosition = (
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  bounds: DOMRect,
+) => {
+  const minX = bounds.left;
+  const minY = bounds.top;
+  const maxX = Math.max(minX, bounds.right - width);
+  const maxY = Math.max(minY, bounds.bottom - height);
+  return {
+    x: Math.max(minX, Math.min(x, maxX)),
+    y: Math.max(minY, Math.min(y, maxY)),
+  };
+};
+
 const handleDragStart = (e: MouseEvent) => {
-  if ((e.target as HTMLElement).closest(".panel-close-btn")) return;
+  const target = e.target as HTMLElement;
+  if (target.closest(".panel-close-btn")) return;
+  if (target.closest('[data-panel-resize-handle="true"]')) return;
+
   isDragging.value = true;
   startPos.value = {
     x: e.clientX - panelPos.value.x,
@@ -49,39 +86,29 @@ const handleDragStart = (e: MouseEvent) => {
 };
 
 const handleDragMove = (e: MouseEvent) => {
-  if (!isDragging.value || !panelRef.value) return;
+  if (!isDragging.value) return;
 
   let newX = e.clientX - startPos.value.x;
   let newY = e.clientY - startPos.value.y;
+  const width = panelSize.value.width;
+  const height = panelSize.value.height;
+  const bounds = getCanvasBounds();
 
-  const panelRect = panelRef.value.getBoundingClientRect();
-  const root =
-    (panelRef.value?.getRootNode() as Document | ShadowRoot) || document;
-  const canvasScroll = root.querySelector(".canvas-scroll");
+  if (bounds) {
+    const clamped = clampPosition(newX, newY, width, height, bounds);
+    newX = clamped.x;
+    newY = clamped.y;
 
-  if (canvasScroll) {
-    const bounds = canvasScroll.getBoundingClientRect();
-
-    // In PrintDesigner, the actual visible area is represented by canvas-scroll bounds
-    // We want the panel to stay strictly within these bounds
-    const minX = bounds.left;
-    const minY = bounds.top;
-    const maxX = bounds.right - panelRect.width;
-    const maxY = bounds.bottom - panelRect.height;
-
-    newX = Math.max(minX, Math.min(newX, maxX));
-    newY = Math.max(minY, Math.min(newY, maxY));
-
-    // Magnetic snap to edges
     const SNAP_DISTANCE = 12;
-    if (Math.abs(newX - minX) < SNAP_DISTANCE) newX = minX;
-    if (Math.abs(newY - minY) < SNAP_DISTANCE) newY = minY;
+    const maxX = Math.max(bounds.left, bounds.right - width);
+    const maxY = Math.max(bounds.top, bounds.bottom - height);
+    if (Math.abs(newX - bounds.left) < SNAP_DISTANCE) newX = bounds.left;
+    if (Math.abs(newY - bounds.top) < SNAP_DISTANCE) newY = bounds.top;
     if (Math.abs(maxX - newX) < SNAP_DISTANCE) newX = maxX;
     if (Math.abs(maxY - newY) < SNAP_DISTANCE) newY = maxY;
   } else {
-    // Fallback to window bounds
-    newX = Math.max(0, Math.min(newX, window.innerWidth - panelRect.width));
-    newY = Math.max(0, Math.min(newY, window.innerHeight - panelRect.height));
+    newX = Math.max(0, Math.min(newX, window.innerWidth - width));
+    newY = Math.max(0, Math.min(newY, window.innerHeight - height));
   }
 
   panelPos.value = { x: newX, y: newY };
@@ -91,6 +118,62 @@ const handleDragEnd = () => {
   isDragging.value = false;
   document.removeEventListener("mousemove", handleDragMove);
   document.removeEventListener("mouseup", handleDragEnd);
+};
+
+const handleResizeStart = (e: MouseEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+  isResizing.value = true;
+  resizeStart.value = {
+    x: e.clientX,
+    y: e.clientY,
+    width: panelSize.value.width,
+    height: panelSize.value.height,
+  };
+  document.addEventListener("mousemove", handleResizeMove);
+  document.addEventListener("mouseup", handleResizeEnd);
+};
+
+const handleResizeMove = (e: MouseEvent) => {
+  if (!isResizing.value) return;
+
+  const deltaX = e.clientX - resizeStart.value.x;
+  const deltaY = e.clientY - resizeStart.value.y;
+  let nextWidth = resizeStart.value.width + deltaX;
+  let nextHeight = resizeStart.value.height + deltaY;
+
+  const bounds = getCanvasBounds();
+  if (bounds) {
+    const maxWidth = Math.max(
+      PANEL_MIN_WIDTH,
+      Math.min(PANEL_MAX_WIDTH, bounds.right - panelPos.value.x),
+    );
+    const maxHeight = Math.max(PANEL_MIN_HEIGHT, bounds.bottom - panelPos.value.y);
+    nextWidth = Math.max(PANEL_MIN_WIDTH, Math.min(nextWidth, maxWidth));
+    nextHeight = Math.max(PANEL_MIN_HEIGHT, Math.min(nextHeight, maxHeight));
+  } else {
+    const maxWidth = Math.max(
+      PANEL_MIN_WIDTH,
+      Math.min(PANEL_MAX_WIDTH, window.innerWidth - panelPos.value.x),
+    );
+    const maxHeight = Math.max(
+      PANEL_MIN_HEIGHT,
+      window.innerHeight - panelPos.value.y,
+    );
+    nextWidth = Math.max(PANEL_MIN_WIDTH, Math.min(nextWidth, maxWidth));
+    nextHeight = Math.max(PANEL_MIN_HEIGHT, Math.min(nextHeight, maxHeight));
+  }
+
+  panelSize.value = {
+    width: nextWidth,
+    height: nextHeight,
+  };
+};
+
+const handleResizeEnd = () => {
+  isResizing.value = false;
+  document.removeEventListener("mousemove", handleResizeMove);
+  document.removeEventListener("mouseup", handleResizeEnd);
 };
 
 // Handle dragging variables to canvas
@@ -120,11 +203,8 @@ const handleVarDragStart = (event: DragEvent, item: any) => {
 let retryCount = 0;
 const updatePosition = async () => {
   await nextTick();
-  const root =
-    (panelRef.value?.getRootNode() as Document | ShadowRoot) || document;
-  const canvasScroll = root.querySelector(".canvas-scroll");
-  if (canvasScroll) {
-    const bounds = canvasScroll.getBoundingClientRect();
+  const bounds = getCanvasBounds();
+  if (bounds) {
     // Sometimes getBoundingClientRect is 0 on mount, wait for a frame if needed
     if (bounds.width === 0 && retryCount < 10) {
       retryCount++;
@@ -133,39 +213,31 @@ const updatePosition = async () => {
     }
     retryCount = 0;
 
-    const defaultX = bounds.left;
-    const defaultY = bounds.top;
+    const maxWidthByBounds = Math.max(
+      PANEL_MIN_WIDTH,
+      Math.min(PANEL_MAX_WIDTH, bounds.width),
+    );
+    const maxHeightByBounds = Math.max(PANEL_MIN_HEIGHT, bounds.height);
+    panelSize.value = {
+      width: Math.min(
+        Math.max(panelSize.value.width, PANEL_MIN_WIDTH),
+        maxWidthByBounds,
+      ),
+      height: Math.min(
+        Math.max(panelSize.value.height, PANEL_MIN_HEIGHT),
+        maxHeightByBounds,
+      ),
+    };
 
-    const minX = bounds.left;
-    const minY = bounds.top;
-
-    // Ensure panel fits inside canvas
-    const availableHeight = bounds.bottom - bounds.top;
-    maxPanelHeight.value = `${Math.max(200, availableHeight)}px`;
-
-    await nextTick(); // wait for max height to apply
-
-    const panelWidth = panelRef.value
-      ? panelRef.value.getBoundingClientRect().width
-      : 280;
-    const panelHeight = panelRef.value
-      ? panelRef.value.getBoundingClientRect().height
-      : 400;
-
-    const maxX = Math.max(minX, bounds.right - panelWidth);
-    const maxY = Math.max(minY, bounds.bottom - panelHeight);
-
-    if (
-      panelPos.value.x < minX ||
-      panelPos.value.x > maxX ||
-      panelPos.value.y < minY ||
-      panelPos.value.y > maxY
-    ) {
-      panelPos.value = {
-        x: Math.max(minX, Math.min(panelPos.value.x, maxX)),
-        y: Math.max(minY, Math.min(panelPos.value.y, maxY)),
-      };
-    }
+    const seedX = panelPos.value.x < 0 ? bounds.left : panelPos.value.x;
+    const seedY = panelPos.value.y < 0 ? bounds.top : panelPos.value.y;
+    panelPos.value = clampPosition(
+      seedX,
+      seedY,
+      panelSize.value.width,
+      panelSize.value.height,
+      bounds,
+    );
   } else {
     // Retry if canvasScroll not found yet
     if (retryCount < 10) {
@@ -176,6 +248,13 @@ const updatePosition = async () => {
       if (panelPos.value.x < 0 || panelPos.value.y < 0) {
         panelPos.value = { x: 250, y: 100 };
       }
+      panelSize.value = {
+        width: Math.min(
+          PANEL_MAX_WIDTH,
+          Math.max(PANEL_MIN_WIDTH, panelSize.value.width),
+        ),
+        height: Math.max(PANEL_MIN_HEIGHT, panelSize.value.height),
+      };
     }
   }
 };
@@ -235,6 +314,8 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener("mousemove", handleDragMove);
   document.removeEventListener("mouseup", handleDragEnd);
+  document.removeEventListener("mousemove", handleResizeMove);
+  document.removeEventListener("mouseup", handleResizeEnd);
   if (resizeObserver) {
     resizeObserver.disconnect();
   }
@@ -245,12 +326,13 @@ onUnmounted(() => {
   <div
     v-if="store.showVariablesPanel"
     ref="panelRef"
-    class="fixed bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col z-[2000] overflow-hidden"
+    class="fixed bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden"
     :style="{
       left: `${panelPos.x}px`,
       top: `${panelPos.y}px`,
-      width: '280px',
-      maxHeight: maxPanelHeight,
+      width: `${panelSize.width}px`,
+      height: `${panelSize.height}px`,
+      zIndex: panelZIndex,
     }"
   >
     <!-- Header -->
@@ -345,6 +427,40 @@ onUnmounted(() => {
         </template>
       </div>
     </div>
+
+    <button
+      type="button"
+      title="Resize panel"
+      data-panel-resize-handle="true"
+      class="absolute bottom-0.5 right-0.5 z-20 h-4 w-4 cursor-se-resize bg-transparent p-0 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
+      @mousedown.stop.prevent="handleResizeStart"
+    >
+      <svg
+        class="h-4 w-4"
+        viewBox="0 0 16 16"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M6.5 14L14 6.5"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linecap="round"
+        />
+        <path
+          d="M3 14L14 3"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linecap="round"
+        />
+        <path
+          d="M9.8 14L14 9.8"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-linecap="round"
+        />
+      </svg>
+    </button>
   </div>
 </template>
 

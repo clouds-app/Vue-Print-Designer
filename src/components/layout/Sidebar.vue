@@ -589,12 +589,13 @@ onUnmounted(() => {
 
 <template>
   <aside
-    class="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full z-40"
+    class="w-full bg-white dark:bg-gray-900 flex flex-col h-full z-40"
   >
     <div
-      class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+      class="p-4 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
+      data-floating-panel-drag-handle="true"
     >
-      <h2 class="font-semibold text-gray-700 dark:text-gray-200">
+      <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
         {{ t("sidebar.elements") }}
       </h2>
       <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">

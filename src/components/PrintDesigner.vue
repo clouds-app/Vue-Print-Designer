@@ -23,6 +23,7 @@ import { toast } from "@/utils/toast";
 import Save from "~icons/material-symbols/save";
 import SaveAs from "~icons/material-symbols/save-as";
 import Logout from "~icons/material-symbols/logout";
+import Close from "~icons/material-symbols/close";
 
 const store = useDesignerStore();
 const templateStore = useTemplateStore();
@@ -33,6 +34,7 @@ const { t } = useI18n();
 const props = defineProps<{ headless?: boolean }>();
 
 const scrollContainer = ref<HTMLElement | null>(null);
+const panelsHostRef = ref<HTMLElement | null>(null);
 const rootContainer = ref<HTMLElement | null>(null);
 const modalContainer = ref<HTMLElement | null>(null);
 const designerInstanceId = `designer-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
@@ -48,8 +50,418 @@ const canvasWrapper = ref<HTMLElement | null>(null);
 const showSaveAsModal = ref(false);
 const brandTick = ref(0);
 
+type FloatingPanelKey = "sidebar" | "properties" | "minimap";
+const FLOAT_PANEL_MIN_WIDTH = 256;
+const FLOAT_PANEL_MAX_WIDTH = 520;
+const FLOAT_PANEL_MARGIN = 12;
+const FLOAT_PANEL_MIN_HEIGHT = 280;
+const MINIMAP_PANEL_FALLBACK_WIDTH = 212;
+const MINIMAP_PANEL_FALLBACK_HEIGHT = 252;
+
+type FloatingPanelBounds = {
+  minX: number;
+  minY: number;
+  maxRight: number;
+  maxBottom: number;
+  maxHeight: number;
+};
+
+const panelsHostSize = ref({ width: 0, height: 0 });
+const sidebarPanelPos = ref({ x: FLOAT_PANEL_MARGIN, y: FLOAT_PANEL_MARGIN });
+const propertiesPanelPos = ref({ x: FLOAT_PANEL_MARGIN, y: FLOAT_PANEL_MARGIN });
+const sidebarPanelWidth = ref(FLOAT_PANEL_MIN_WIDTH);
+const propertiesPanelWidth = ref(FLOAT_PANEL_MIN_WIDTH);
+const sidebarPanelHeight = ref(FLOAT_PANEL_MIN_HEIGHT);
+const propertiesPanelHeight = ref(FLOAT_PANEL_MIN_HEIGHT);
+const minimapPanelRef = ref<HTMLElement | null>(null);
+const minimapPanelPos = ref({ x: FLOAT_PANEL_MARGIN, y: FLOAT_PANEL_MARGIN });
+const hasInitializedFloatingPanels = ref(false);
+const hasInitializedMinimapPanel = ref(false);
+
+let draggingPanel: FloatingPanelKey | null = null;
+let dragStartPointer = { x: 0, y: 0 };
+let dragStartPanelPos = { x: 0, y: 0 };
+let resizingPanel: FloatingPanelKey | null = null;
+let resizeStartPointer = { x: 0, y: 0 };
+let resizeStartWidth = FLOAT_PANEL_MIN_WIDTH;
+let resizeStartHeight = FLOAT_PANEL_MIN_HEIGHT;
+
 const handleBrandThemeUpdated = () => {
   brandTick.value += 1;
+};
+
+const updatePanelsHostSize = () => {
+  if (!panelsHostRef.value) return;
+  panelsHostSize.value = {
+    width: panelsHostRef.value.clientWidth,
+    height: panelsHostRef.value.clientHeight,
+  };
+};
+
+const getFloatingPanelBounds = (): FloatingPanelBounds => {
+  const { width, height } = panelsHostSize.value;
+  const fallbackMinX = FLOAT_PANEL_MARGIN;
+  const fallbackMinY = FLOAT_PANEL_MARGIN;
+  const fallbackMaxRight = Math.max(fallbackMinX, width - FLOAT_PANEL_MARGIN);
+  const fallbackMaxBottom = Math.max(
+    fallbackMinY,
+    height - FLOAT_PANEL_MARGIN,
+  );
+  const fallbackMaxHeight = Math.max(
+    FLOAT_PANEL_MIN_HEIGHT,
+    fallbackMaxBottom - fallbackMinY,
+  );
+
+  if (!panelsHostRef.value || !scrollContainer.value) {
+    return {
+      minX: fallbackMinX,
+      minY: fallbackMinY,
+      maxRight: fallbackMaxRight,
+      maxBottom: fallbackMaxBottom,
+      maxHeight: fallbackMaxHeight,
+    };
+  }
+
+  const hostRect = panelsHostRef.value.getBoundingClientRect();
+  const canvasRect = scrollContainer.value.getBoundingClientRect();
+
+  const minX = Math.max(FLOAT_PANEL_MARGIN, canvasRect.left - hostRect.left);
+  const minY = Math.max(FLOAT_PANEL_MARGIN, canvasRect.top - hostRect.top);
+  const maxRight = canvasRect.right - hostRect.left;
+  const maxBottom = canvasRect.bottom - hostRect.top;
+  const maxHeight = Math.max(FLOAT_PANEL_MIN_HEIGHT, maxBottom - minY);
+
+  return {
+    minX,
+    minY,
+    maxRight,
+    maxBottom,
+    maxHeight,
+  };
+};
+
+const clampPanelPos = (
+  x: number,
+  y: number,
+  panelWidth: number,
+  panelHeight: number,
+) => {
+  const { minX, minY, maxRight, maxBottom } =
+    getFloatingPanelBounds();
+  const maxX = Math.max(minX, maxRight - panelWidth);
+  const maxY = Math.max(minY, maxBottom - panelHeight);
+
+  return {
+    x: Math.min(Math.max(x, minX), maxX),
+    y: Math.min(Math.max(y, minY), maxY),
+  };
+};
+
+const clampPanelWidth = (panelWidth: number, panelX: number) => {
+  const { minX, maxRight } = getFloatingPanelBounds();
+  const maxWidthByBounds = Math.max(
+    FLOAT_PANEL_MIN_WIDTH,
+    maxRight - Math.max(panelX, minX),
+  );
+  const maxWidth = Math.min(FLOAT_PANEL_MAX_WIDTH, maxWidthByBounds);
+  return Math.min(Math.max(panelWidth, FLOAT_PANEL_MIN_WIDTH), maxWidth);
+};
+
+const clampPanelHeight = (panelHeight: number, panelY: number) => {
+  const { minY, maxBottom, maxHeight } = getFloatingPanelBounds();
+  const localMaxHeight = Math.max(
+    FLOAT_PANEL_MIN_HEIGHT,
+    maxBottom - Math.max(panelY, minY),
+  );
+  const maxAllowedHeight = Math.min(maxHeight, localMaxHeight);
+  return Math.min(Math.max(panelHeight, FLOAT_PANEL_MIN_HEIGHT), maxAllowedHeight);
+};
+
+const getMinimapPanelSize = () => {
+  if (!minimapPanelRef.value) {
+    return {
+      width: MINIMAP_PANEL_FALLBACK_WIDTH,
+      height: MINIMAP_PANEL_FALLBACK_HEIGHT,
+    };
+  }
+
+  const rect = minimapPanelRef.value.getBoundingClientRect();
+  return {
+    width: rect.width > 0 ? rect.width : MINIMAP_PANEL_FALLBACK_WIDTH,
+    height: rect.height > 0 ? rect.height : MINIMAP_PANEL_FALLBACK_HEIGHT,
+  };
+};
+
+const placeMinimapNearPropertiesPanel = () => {
+  const minimapSize = getMinimapPanelSize();
+  const targetX =
+    propertiesPanelPos.value.x - minimapSize.width - FLOAT_PANEL_MARGIN;
+  const targetY = propertiesPanelPos.value.y;
+
+  minimapPanelPos.value = clampPanelPos(
+    targetX,
+    targetY,
+    minimapSize.width,
+    minimapSize.height,
+  );
+  hasInitializedMinimapPanel.value = true;
+};
+
+const initOrClampFloatingPanels = () => {
+  updatePanelsHostSize();
+  const { width, height } = panelsHostSize.value;
+  if (!width || !height) return;
+
+  const bounds = getFloatingPanelBounds();
+
+  if (!hasInitializedFloatingPanels.value) {
+    sidebarPanelHeight.value = bounds.maxHeight;
+    propertiesPanelHeight.value = bounds.maxHeight;
+    sidebarPanelPos.value = { x: bounds.minX, y: bounds.minY };
+    propertiesPanelPos.value = {
+      x: Math.max(bounds.minX, bounds.maxRight - propertiesPanelWidth.value),
+      y: bounds.minY,
+    };
+    hasInitializedFloatingPanels.value = true;
+  }
+
+  sidebarPanelWidth.value = clampPanelWidth(
+    sidebarPanelWidth.value,
+    sidebarPanelPos.value.x,
+  );
+  propertiesPanelWidth.value = clampPanelWidth(
+    propertiesPanelWidth.value,
+    propertiesPanelPos.value.x,
+  );
+  sidebarPanelHeight.value = clampPanelHeight(
+    sidebarPanelHeight.value,
+    sidebarPanelPos.value.y,
+  );
+  propertiesPanelHeight.value = clampPanelHeight(
+    propertiesPanelHeight.value,
+    propertiesPanelPos.value.y,
+  );
+
+  sidebarPanelPos.value = clampPanelPos(
+    sidebarPanelPos.value.x,
+    sidebarPanelPos.value.y,
+    sidebarPanelWidth.value,
+    sidebarPanelHeight.value,
+  );
+  propertiesPanelPos.value = clampPanelPos(
+    propertiesPanelPos.value.x,
+    propertiesPanelPos.value.y,
+    propertiesPanelWidth.value,
+    propertiesPanelHeight.value,
+  );
+
+  if (!store.showMinimap) return;
+
+  if (!hasInitializedMinimapPanel.value) {
+    placeMinimapNearPropertiesPanel();
+    return;
+  }
+
+  const minimapSize = getMinimapPanelSize();
+  minimapPanelPos.value = clampPanelPos(
+    minimapPanelPos.value.x,
+    minimapPanelPos.value.y,
+    minimapSize.width,
+    minimapSize.height,
+  );
+};
+
+const sidebarPanelStyle = computed(() => {
+  return {
+    left: `${sidebarPanelPos.value.x}px`,
+    top: `${sidebarPanelPos.value.y}px`,
+    width: `${sidebarPanelWidth.value}px`,
+    height: `${sidebarPanelHeight.value}px`,
+  };
+});
+
+const propertiesPanelStyle = computed(() => {
+  return {
+    left: `${propertiesPanelPos.value.x}px`,
+    top: `${propertiesPanelPos.value.y}px`,
+    width: `${propertiesPanelWidth.value}px`,
+    height: `${propertiesPanelHeight.value}px`,
+  };
+});
+
+const minimapPanelStyle = computed(() => {
+  return {
+    left: `${minimapPanelPos.value.x}px`,
+    top: `${minimapPanelPos.value.y}px`,
+  };
+});
+
+const getPanelZIndex = (panel: FloatingPanelKey) => {
+  if (draggingPanel === panel || resizingPanel === panel) {
+    return 5100;
+  }
+  return panel === "minimap" ? 50 : 40;
+};
+
+const handlePanelDragMove = (e: MouseEvent) => {
+  if (!draggingPanel) return;
+
+  e.preventDefault();
+  const deltaX = e.clientX - dragStartPointer.x;
+  const deltaY = e.clientY - dragStartPointer.y;
+  const panelWidth =
+    draggingPanel === "sidebar"
+      ? sidebarPanelWidth.value
+      : draggingPanel === "properties"
+        ? propertiesPanelWidth.value
+        : getMinimapPanelSize().width;
+  const panelHeight =
+    draggingPanel === "sidebar"
+      ? sidebarPanelHeight.value
+      : draggingPanel === "properties"
+        ? propertiesPanelHeight.value
+        : getMinimapPanelSize().height;
+  const nextPos = clampPanelPos(
+    dragStartPanelPos.x + deltaX,
+    dragStartPanelPos.y + deltaY,
+    panelWidth,
+    panelHeight,
+  );
+
+  if (draggingPanel === "sidebar") {
+    sidebarPanelPos.value = nextPos;
+    return;
+  }
+
+  if (draggingPanel === "properties") {
+    propertiesPanelPos.value = nextPos;
+    return;
+  }
+
+  minimapPanelPos.value = nextPos;
+};
+
+const stopPanelDrag = () => {
+  draggingPanel = null;
+  window.removeEventListener("mousemove", handlePanelDragMove);
+  window.removeEventListener("mouseup", stopPanelDrag);
+};
+
+const handlePanelResizeMove = (e: MouseEvent) => {
+  if (!resizingPanel) return;
+
+  e.preventDefault();
+  const deltaX = e.clientX - resizeStartPointer.x;
+  const deltaY = e.clientY - resizeStartPointer.y;
+
+  if (resizingPanel === "sidebar") {
+    const nextWidth = clampPanelWidth(
+      resizeStartWidth + deltaX,
+      sidebarPanelPos.value.x,
+    );
+    const nextHeight = clampPanelHeight(
+      resizeStartHeight + deltaY,
+      sidebarPanelPos.value.y,
+    );
+    sidebarPanelWidth.value = nextWidth;
+    sidebarPanelHeight.value = nextHeight;
+    sidebarPanelPos.value = clampPanelPos(
+      sidebarPanelPos.value.x,
+      sidebarPanelPos.value.y,
+      nextWidth,
+      nextHeight,
+    );
+    return;
+  }
+
+  const nextWidth = clampPanelWidth(
+    resizeStartWidth + deltaX,
+    propertiesPanelPos.value.x,
+  );
+  const nextHeight = clampPanelHeight(
+    resizeStartHeight + deltaY,
+    propertiesPanelPos.value.y,
+  );
+  propertiesPanelWidth.value = nextWidth;
+  propertiesPanelHeight.value = nextHeight;
+  propertiesPanelPos.value = clampPanelPos(
+    propertiesPanelPos.value.x,
+    propertiesPanelPos.value.y,
+    nextWidth,
+    nextHeight,
+  );
+};
+
+const stopPanelResize = () => {
+  resizingPanel = null;
+  window.removeEventListener("mousemove", handlePanelResizeMove);
+  window.removeEventListener("mouseup", stopPanelResize);
+};
+
+const startPanelResize = (panel: FloatingPanelKey, e: MouseEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  stopPanelDrag();
+  resizingPanel = panel;
+  resizeStartPointer = { x: e.clientX, y: e.clientY };
+  resizeStartWidth =
+    panel === "sidebar" ? sidebarPanelWidth.value : propertiesPanelWidth.value;
+  resizeStartHeight =
+    panel === "sidebar"
+      ? sidebarPanelHeight.value
+      : propertiesPanelHeight.value;
+
+  window.addEventListener("mousemove", handlePanelResizeMove);
+  window.addEventListener("mouseup", stopPanelResize);
+};
+
+const startPanelDrag = (panel: FloatingPanelKey, e: MouseEvent) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  draggingPanel = panel;
+  dragStartPointer = { x: e.clientX, y: e.clientY };
+  dragStartPanelPos =
+    panel === "sidebar"
+      ? { ...sidebarPanelPos.value }
+      : panel === "properties"
+        ? { ...propertiesPanelPos.value }
+        : { ...minimapPanelPos.value };
+
+  window.addEventListener("mousemove", handlePanelDragMove);
+  window.addEventListener("mouseup", stopPanelDrag);
+};
+
+const handleFloatingPanelMouseDown = (panel: FloatingPanelKey, e: MouseEvent) => {
+  const target = e.target as HTMLElement | null;
+  if (target?.closest(".panel-close-btn")) {
+    return;
+  }
+  if (!target?.closest('[data-floating-panel-drag-handle="true"]')) {
+    return;
+  }
+  startPanelDrag(panel, e);
+};
+
+watch(
+  () => store.showMinimap,
+  (show) => {
+    if (!show) {
+      hasInitializedMinimapPanel.value = false;
+      return;
+    }
+
+    hasInitializedMinimapPanel.value = false;
+    nextTick(() => {
+      initOrClampFloatingPanels();
+    });
+  },
+);
+
+const handleLayoutResize = () => {
+  updateOffset();
+  initOrClampFloatingPanels();
 };
 
 const getThemeRgba = (cssVar: string, alpha: number) => {
@@ -73,17 +485,22 @@ onMounted(() => {
 
   nextTick(() => {
     updateOffset();
+    initOrClampFloatingPanels();
   });
 
   resizeObserver = new ResizeObserver(() => {
     updateOffset();
+    initOrClampFloatingPanels();
   });
 
   if (scrollContainer.value) {
     resizeObserver.observe(scrollContainer.value);
   }
+  if (panelsHostRef.value) {
+    resizeObserver.observe(panelsHostRef.value);
+  }
 
-  window.addEventListener("resize", updateOffset);
+  window.addEventListener("resize", handleLayoutResize);
   window.addEventListener("keydown", handleCtrlKey);
   window.addEventListener("keydown", handleCustomEditShortcuts);
   window.addEventListener("keyup", handleCtrlKey);
@@ -318,11 +735,13 @@ const updateOffset = () => {
 
 onUnmounted(() => {
   debouncedAutoSave.cancel();
+  stopPanelDrag();
+  stopPanelResize();
   if (resizeObserver) {
     resizeObserver.disconnect();
     resizeObserver = null;
   }
-  window.removeEventListener("resize", updateOffset);
+  window.removeEventListener("resize", handleLayoutResize);
   window.removeEventListener("mousemove", handleGuideMouseMove);
   window.removeEventListener("mouseup", handleGuideMouseUp);
   window.removeEventListener("keydown", handleCtrlKey);
@@ -594,8 +1013,7 @@ const rulerRanges = computed(() => {
     class="h-full w-full flex flex-col bg-gray-100 overflow-hidden"
   >
     <Header />
-    <div class="flex-1 flex overflow-hidden">
-      <Sidebar />
+    <div ref="panelsHostRef" class="flex-1 flex overflow-hidden relative">
       <main class="flex-1 overflow-hidden relative flex flex-col">
         <div
           v-if="store.editingCustomElementId"
@@ -905,31 +1323,143 @@ const rulerRanges = computed(() => {
         </footer> -->
 
         <!-- Minimap -->
-        <div v-if="store.showMinimap" class="absolute bottom-4 right-4 z-50">
-          <Minimap
-            :scroll-width="scrollWidth"
-            :scroll-height="scrollHeight"
-            :viewport-width="viewportWidth"
-            :viewport-height="viewportHeight"
-            :scroll-left="scrollX"
-            :scroll-top="scrollY"
-            :pages="store.pages"
-            :page-width="store.canvasSize.width"
-            :page-height="store.canvasSize.height"
-            :zoom="store.zoom"
-            :content-offset-x="offsetX"
-            :content-offset-y="offsetY"
-            :canvas-background="store.canvasBackground"
-            :show-header-line="store.showHeaderLine"
-            :show-footer-line="store.showFooterLine"
-            :header-height="store.headerHeight"
-            :footer-height="store.footerHeight"
-            :watermark="store.watermark || null"
-            @update:scroll="handleMinimapScroll"
-          />
+        <div
+          v-if="store.showMinimap"
+          ref="minimapPanelRef"
+          class="absolute pointer-events-none"
+          :style="[minimapPanelStyle, { zIndex: getPanelZIndex('minimap') }]"
+        >
+          <div
+              class="pointer-events-auto rounded-t-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+            @mousedown="(e) => handleFloatingPanelMouseDown('minimap', e)"
+          >
+            <div
+              class="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 cursor-move select-none"
+              data-floating-panel-drag-handle="true"
+            >
+              <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200 m-0">
+                {{ t("editor.showMinimap") }}
+              </h3>
+              <button
+                class="panel-close-btn p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-500 dark:text-gray-400"
+                @click="store.setShowMinimap(false)"
+              >
+                <Close class="w-4 h-4" />
+              </button>
+            </div>
+
+            <Minimap
+              :scroll-width="scrollWidth"
+              :scroll-height="scrollHeight"
+              :viewport-width="viewportWidth"
+              :viewport-height="viewportHeight"
+              :scroll-left="scrollX"
+              :scroll-top="scrollY"
+              :pages="store.pages"
+              :page-width="store.canvasSize.width"
+              :page-height="store.canvasSize.height"
+              :zoom="store.zoom"
+              :content-offset-x="offsetX"
+              :content-offset-y="offsetY"
+              :canvas-background="store.canvasBackground"
+              :show-header-line="store.showHeaderLine"
+              :show-footer-line="store.showFooterLine"
+              :header-height="store.headerHeight"
+              :footer-height="store.footerHeight"
+              :watermark="store.watermark || null"
+              @update:scroll="handleMinimapScroll"
+            />
+          </div>
         </div>
       </main>
-      <PropertiesPanel />
+
+      <div
+        class="absolute pointer-events-none"
+        :style="[sidebarPanelStyle, { zIndex: getPanelZIndex('sidebar') }]"
+      >
+        <div
+          class="relative h-full w-full pointer-events-auto rounded-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+          @mousedown="(e) => handleFloatingPanelMouseDown('sidebar', e)"
+        >
+          <Sidebar />
+        </div>
+        <button
+          type="button"
+          title="Resize panel"
+          class="absolute bottom-0.5 right-0.5 z-20 h-4 w-4 cursor-se-resize bg-transparent p-0 text-gray-400 pointer-events-auto hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
+          @mousedown.stop.prevent="(e) => startPanelResize('sidebar', e)"
+        >
+          <svg
+            class="h-4 w-4"
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M6.5 14L14 6.5"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+            <path
+              d="M3 14L14 3"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+            <path
+              d="M9.8 14L14 9.8"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <div
+        class="absolute pointer-events-none"
+        :style="[propertiesPanelStyle, { zIndex: getPanelZIndex('properties') }]"
+      >
+        <div
+          class="relative h-full w-full pointer-events-auto rounded-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+          @mousedown="(e) => handleFloatingPanelMouseDown('properties', e)"
+        >
+          <PropertiesPanel />
+        </div>
+        <button
+          type="button"
+          title="Resize panel"
+          class="absolute bottom-0.5 right-0.5 z-20 h-4 w-4 cursor-se-resize bg-transparent p-0 text-gray-400 pointer-events-auto hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
+          @mousedown.stop.prevent="(e) => startPanelResize('properties', e)"
+        >
+          <svg
+            class="h-4 w-4"
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M6.5 14L14 6.5"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+            <path
+              d="M3 14L14 3"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+            <path
+              d="M9.8 14L14 9.8"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <InputModal

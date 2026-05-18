@@ -201,9 +201,9 @@ onUnmounted(() => {
         class="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-96 animate-in fade-in zoom-in duration-200 flex flex-col overflow-hidden"
       >
         <div
-          class="h-[60px] flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0"
+          class="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0"
         >
-          <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+          <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">
             {{ title || t("input.title") }}
           </h3>
           <button
@@ -324,14 +324,14 @@ onUnmounted(() => {
           <div class="flex justify-end gap-2">
             <button
               @click="emit('close')"
-              class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
+              class="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
             >
               {{ t("common.cancel") }}
             </button>
             <button
               @click="handleSave"
               :disabled="!isFormValid"
-              class="px-4 py-2 text-sm font-medium text-white bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {{ t("common.confirm") }}
             </button>

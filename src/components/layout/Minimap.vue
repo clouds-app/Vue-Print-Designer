@@ -1,17 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
-// 定义元素类型枚举
-enum ElementType {
-  TEXT = "TEXT",
-  IMAGE = "IMAGE",
-  BARCODE = "BARCODE",
-  QRCODE = "QRCODE",
-  TABLE = "TABLE",
-  LINE = "LINE",
-  RECT = "RECT",
-  CIRCLE = "CIRCLE",
-  PAGE_NUMBER = "PAGE_NUMBER",
-}
+import { computed, ref, watch, onMounted, nextTick } from "vue";
+import { ElementType } from "@/types";
 
 // 定义水印设置接口
 interface WatermarkSettings {
@@ -367,34 +356,68 @@ watch(
 
 const isDragging = ref(false);
 const scrollContainer = ref<HTMLElement | null>(null);
+const DRAG_EDGE_AUTO_SCROLL_DISTANCE = 24;
+const DRAG_EDGE_AUTO_SCROLL_SPEED = 12;
 
-// Sync scroll container with viewport position
+const ensureViewportVisible = () => {
+  if (!scrollContainer.value || isDragging.value) return;
+
+  const container = scrollContainer.value;
+  const viewportTop = props.scrollTop * ratio.value;
+  const viewportHeight = props.viewportHeight * ratio.value;
+  const padding = 8;
+  const currentTop = container.scrollTop;
+  const currentBottom = currentTop + container.clientHeight;
+  const targetTop = Math.max(0, viewportTop - padding);
+  const targetBottom = viewportTop + viewportHeight + padding;
+
+  let nextTop = currentTop;
+  if (targetTop < currentTop) {
+    nextTop = targetTop;
+  } else if (targetBottom > currentBottom) {
+    nextTop = targetBottom - container.clientHeight;
+  }
+
+  if (Math.abs(nextTop - currentTop) > 1) {
+    container.scrollTop = nextTop;
+  }
+};
+
+const scheduleEnsureViewportVisible = () => {
+  nextTick(() => {
+    ensureViewportVisible();
+  });
+};
+
 watch(
-  () => props.scrollTop,
+  [() => props.scrollTop, () => props.viewportHeight, () => ratio.value],
   () => {
-    if (!scrollContainer.value) return;
-
-    const rectTop = props.scrollTop * ratio.value;
-    const rectHeight = props.viewportHeight * ratio.value;
-    const containerHeight = scrollContainer.value.clientHeight;
-    const currentScroll = scrollContainer.value.scrollTop;
-
-    // If viewport rect is out of view (or close to edge), scroll to keep it visible
-    if (rectTop < currentScroll) {
-      scrollContainer.value.scrollTop = rectTop;
-    } else if (rectTop + rectHeight > currentScroll + containerHeight) {
-      scrollContainer.value.scrollTop = rectTop + rectHeight - containerHeight;
-    }
+    scheduleEnsureViewportVisible();
   },
+  { immediate: true },
 );
+
+onMounted(() => {
+  scheduleEnsureViewportVisible();
+});
 
 const handleMouseDown = (e: MouseEvent) => {
   e.preventDefault();
-  // Ensure we are working with the content container, not the scroll wrapper
-  const container = e.currentTarget as HTMLElement;
-  const rect = container.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const content = e.currentTarget as HTMLElement;
+  const container = scrollContainer.value;
+  if (!container) return;
+
+  const getContentPoint = (clientX: number, clientY: number) => {
+    const rect = container.getBoundingClientRect();
+    return {
+      x: clientX - rect.left + container.scrollLeft,
+      y: clientY - rect.top + container.scrollTop,
+    };
+  };
+
+  const point = getContentPoint(e.clientX, e.clientY);
+  const x = point.x;
+  const y = point.y;
 
   const viewportX = props.scrollLeft * ratio.value;
   const viewportY = props.scrollTop * ratio.value;
@@ -424,23 +447,77 @@ const handleMouseDown = (e: MouseEvent) => {
   }
 
   isDragging.value = true;
+  let lastClientX = e.clientX;
+  let lastClientY = e.clientY;
+  let autoScrollDirection = 0;
+  let rafId: number | null = null;
 
-  const onMouseMove = (ev: MouseEvent) => {
-    const currentRect = container.getBoundingClientRect();
-    const currentX = ev.clientX - currentRect.left;
-    const currentY = ev.clientY - currentRect.top;
-
-    const newViewportX = currentX - startOffsetX;
-    const newViewportY = currentY - startOffsetY;
+  const emitViewportFromPointer = (clientX: number, clientY: number) => {
+    const current = getContentPoint(clientX, clientY);
+    const maxLeft = Math.max(0, props.scrollWidth - props.viewportWidth);
+    const maxTop = Math.max(0, props.scrollHeight - props.viewportHeight);
+    const nextLeft = Math.max(
+      0,
+      Math.min(maxLeft, (current.x - startOffsetX) / ratio.value),
+    );
+    const nextTop = Math.max(
+      0,
+      Math.min(maxTop, (current.y - startOffsetY) / ratio.value),
+    );
 
     emit("update:scroll", {
-      left: newViewportX / ratio.value,
-      top: newViewportY / ratio.value,
+      left: nextLeft,
+      top: nextTop,
     });
+  };
+
+  const updateAutoScrollDirection = (clientY: number) => {
+    const rect = container.getBoundingClientRect();
+    if (clientY < rect.top + DRAG_EDGE_AUTO_SCROLL_DISTANCE) {
+      autoScrollDirection = -1;
+      return;
+    }
+    if (clientY > rect.bottom - DRAG_EDGE_AUTO_SCROLL_DISTANCE) {
+      autoScrollDirection = 1;
+      return;
+    }
+    autoScrollDirection = 0;
+  };
+
+  const autoScrollTick = () => {
+    if (!isDragging.value) return;
+
+    if (autoScrollDirection !== 0) {
+      const prev = container.scrollTop;
+      const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+      container.scrollTop = Math.max(
+        0,
+        Math.min(maxScroll, prev + autoScrollDirection * DRAG_EDGE_AUTO_SCROLL_SPEED),
+      );
+
+      if (container.scrollTop !== prev) {
+        emitViewportFromPointer(lastClientX, lastClientY);
+      }
+    }
+
+    rafId = window.requestAnimationFrame(autoScrollTick);
+  };
+
+  rafId = window.requestAnimationFrame(autoScrollTick);
+
+  const onMouseMove = (ev: MouseEvent) => {
+    lastClientX = ev.clientX;
+    lastClientY = ev.clientY;
+    updateAutoScrollDirection(ev.clientY);
+    emitViewportFromPointer(ev.clientX, ev.clientY);
   };
 
   const onMouseUp = () => {
     isDragging.value = false;
+    if (rafId !== null) {
+      window.cancelAnimationFrame(rafId);
+      rafId = null;
+    }
     window.removeEventListener("mousemove", onMouseMove);
     window.removeEventListener("mouseup", onMouseUp);
   };
@@ -453,7 +530,7 @@ const handleMouseDown = (e: MouseEvent) => {
 <template>
   <div
     ref="scrollContainer"
-    class="bg-white border border-gray-200 shadow-lg rounded max-h-[300px] overflow-y-auto overflow-x-hidden box-content no-scrollbar"
+    class="bg-white dark:bg-gray-800 max-h-[300px] overflow-y-auto overflow-x-hidden box-content no-scrollbar"
     :style="{
       width: `${props.scrollWidth * ratio}px`,
       maxWidth: `${WIDTH}px`,

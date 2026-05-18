@@ -101,10 +101,10 @@ onUnmounted(() => {
       >
         <!-- Header -->
         <div
-          class="h-[60px] flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0"
+          class="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0"
         >
           <div class="flex items-center gap-2">
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+            <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">
               {{ title }}
             </h3>
             <span
@@ -133,11 +133,11 @@ onUnmounted(() => {
 
         <!-- Footer -->
         <div
-          class="p-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 flex justify-end rounded-b-lg"
+          class="p-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 flex justify-end rounded-b-lg"
         >
           <button
             @click="handleClose"
-            class="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm"
+            class="px-3 py-1.5 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-xs"
           >
             {{ t("common.close") }}
           </button>

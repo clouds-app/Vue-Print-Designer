@@ -388,8 +388,8 @@ onUnmounted(() => {
       >
         <!-- Sidebar Tabs -->
         <div class="w-48 bg-gray-50 border-r border-gray-200 flex flex-col">
-          <div class="h-[60px] flex items-center px-4 border-b border-gray-200">
-            <h3 class="text-lg font-semibold text-gray-800">
+          <div class="h-14 flex items-center px-4 border-b border-gray-200">
+            <h3 class="text-base font-semibold text-gray-800">
               {{ t("settings.title") }}
             </h3>
           </div>
@@ -474,10 +474,10 @@ onUnmounted(() => {
         <!-- Content Area -->
         <div class="flex-1 flex flex-col min-w-0 relative">
           <div
-            class="h-[60px] flex items-center justify-between px-4 border-b border-gray-200"
+            class="h-14 flex items-center justify-between px-4 border-b border-gray-200"
           >
             <div class="flex items-center gap-3">
-              <h3 class="text-lg font-semibold text-gray-800">
+              <h3 class="text-base font-semibold text-gray-800">
                 {{
                   activeTab === "basic"
                     ? t("settings.basic")
@@ -1015,7 +1015,7 @@ onUnmounted(() => {
 
           <div
             v-if="activeTab === 'local' || activeTab === 'remote'"
-            class="p-4 border-t border-gray-200 bg-gray-50 flex justify-end rounded-br-lg"
+            class="p-3 border-t border-gray-200 bg-gray-50 flex justify-end rounded-br-lg"
           >
             <!-- Local Connection Button -->
             <div v-if="activeTab === 'local'" class="w-full">
@@ -1026,7 +1026,7 @@ onUnmounted(() => {
                   localRetryCountValue > 0 ||
                   (!localConnected && !localHasConfig)
                 "
-                class="w-full inline-flex items-center justify-center gap-2 px-3 h-9 rounded transition-colors text-sm shadow-sm disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed"
+                class="w-full inline-flex items-center justify-center gap-2 px-3 h-8 rounded transition-colors text-xs shadow-sm disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed"
                 :class="connectionButtonClass(localStatusValue)"
               >
                 <LinkIcon v-if="localConnected" class="w-4 h-4" />
@@ -1061,7 +1061,7 @@ onUnmounted(() => {
                   remoteRetryCountValue > 0 ||
                   (!remoteConnected && !remoteHasConfig)
                 "
-                class="w-full inline-flex items-center justify-center gap-2 px-3 h-9 rounded transition-colors text-sm shadow-sm disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed"
+                class="w-full inline-flex items-center justify-center gap-2 px-3 h-8 rounded transition-colors text-xs shadow-sm disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed"
                 :class="connectionButtonClass(remoteStatusValue)"
               >
                 <LinkIcon v-if="remoteConnected" class="w-4 h-4" />

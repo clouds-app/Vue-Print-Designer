@@ -663,9 +663,9 @@ onUnmounted(() => {
           class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[640px] max-w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700"
         >
           <div
-            class="h-[60px] flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700 shrink-0"
+            class="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700 shrink-0"
           >
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+            <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">
               {{ t("editor.advancedSettings") }}
             </h3>
             <button
@@ -811,11 +811,11 @@ onUnmounted(() => {
           </div>
 
           <div
-            class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-end"
+            class="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-end"
           >
             <button
               @click="showAdvancedSettings = false"
-              class="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm font-medium"
+              class="px-3 py-1.5 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-xs font-medium"
             >
               {{ t("common.close") }}
             </button>

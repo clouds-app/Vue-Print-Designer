@@ -250,9 +250,9 @@ onUnmounted(() => {
       >
         <!-- Header -->
         <div
-          class="relative flex items-center justify-between p-4 border-b border-gray-200"
+          class="relative flex items-center justify-between px-4 py-3 border-b border-gray-200"
         >
-          <h3 class="text-lg font-semibold text-gray-800">
+          <h3 class="text-base font-semibold text-gray-800">
             {{ t("preview.title") }}
           </h3>
 
@@ -310,60 +310,60 @@ onUnmounted(() => {
 
         <!-- Footer -->
         <div
-          class="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3 rounded-b-lg"
+          class="p-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2.5 rounded-b-lg"
         >
           <button
             @click="handlePrint"
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+            class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
           >
             <Printer class="text-lg" />
             {{ t("editor.print") }}
           </button>
           <button
             @click="handlePdf"
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+            class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
           >
             <FileOutput class="text-lg" />
             {{ t("editor.exportPdf") }}
           </button>
           <button
             @click="handleExportImages"
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+            class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
           >
             <FileOutput class="text-lg" />
             {{ t("editor.exportImage") }}
           </button>
           <button
             @click="handleExportHtmlBtn"
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+            class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
           >
             <FileOutput class="text-lg" />
             {{ t("editor.exportHtml") }}
           </button>
           <button
             @click="handleViewImageBlob"
-            class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 text-sm text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
+            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
           >
             <DataObject class="text-lg" />
             {{ t("editor.viewImageBlob") }}
           </button>
           <button
             @click="handleViewPdfBlob"
-            class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 text-sm text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
+            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
           >
             <DataObject class="text-lg" />
             {{ t("editor.viewPdfBlob") }}
           </button>
           <button
             @click="handleViewJson"
-            class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 text-sm text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
+            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
           >
             <DataObject class="text-lg" />
             {{ t("editor.viewJson") }}
           </button>
           <button
             @click="handleClose"
-            class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 text-sm text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
+            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
           >
             {{ t("common.close") }}
           </button>
