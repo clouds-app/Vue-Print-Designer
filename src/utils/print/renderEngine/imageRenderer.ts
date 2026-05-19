@@ -167,6 +167,63 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
     return container;
   };
 
+  const parseCssNumber = (value: string) => {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const isAxisAlignedTransform = (transform: string) => {
+    if (!transform || transform === "none") return true;
+    if (!transform.startsWith("matrix(")) return false;
+
+    const values = transform
+      .slice(7, -1)
+      .split(",")
+      .map((item) => parseFloat(item.trim()));
+
+    if (values.length < 4 || values.some((value) => !Number.isFinite(value))) {
+      return false;
+    }
+
+    const b = values[1];
+    const c = values[2];
+    return Math.abs(b) <= 0.001 && Math.abs(c) <= 0.001;
+  };
+
+  // 完全位于画布外的元素不参与后续分页与导出渲染。
+  const isWrapperFullyOutsideCanvas = (
+    wrapper: HTMLElement,
+    canvasWidth: number,
+    canvasHeight: number,
+  ) => {
+    const left = parseCssNumber(wrapper.style.left);
+    const top = parseCssNumber(wrapper.style.top);
+    const wrapperWidth = parseCssNumber(wrapper.style.width);
+    const wrapperHeight = parseCssNumber(wrapper.style.height);
+
+    if (
+      left === null ||
+      top === null ||
+      wrapperWidth === null ||
+      wrapperHeight === null ||
+      wrapperWidth <= 0 ||
+      wrapperHeight <= 0
+    ) {
+      return false;
+    }
+
+    const transform = wrapper.style.transform || "";
+    if (!isAxisAlignedTransform(transform)) {
+      return false;
+    }
+
+    const right = left + wrapperWidth;
+    const bottom = top + wrapperHeight;
+    return (
+      right <= 0 || bottom <= 0 || left >= canvasWidth || top >= canvasHeight
+    );
+  };
+
   // 渲染前预处理：克隆页面、清理节点、分页并同步页码。
   const processContentForImage = async (
     content: RenderContent,
@@ -231,6 +288,12 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
       const wrappers = clone.querySelectorAll(".element-wrapper");
       wrappers.forEach((w, wrapperIndex) => {
         const el = w as HTMLElement;
+
+        if (isWrapperFullyOutsideCanvas(el, width, height)) {
+          el.remove();
+          return;
+        }
+
         el.setAttribute("data-print-wrapper", "true");
         const top = parseFloat(el.style.top || "");
         const elHeight = parseFloat(el.style.height || "");
