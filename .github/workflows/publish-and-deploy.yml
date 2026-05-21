@@ -29,12 +29,38 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
-          PUBLISHED=$(npm view vue-print-designer version || echo "none")
+
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::Missing NPM_TOKEN secret"
+            exit 1
+          fi
+
+          if ! npm whoami >/tmp/npm-user.txt 2>/tmp/npm-whoami.err; then
+            echo "::error::NPM auth failed. Check NPM_TOKEN secret."
+            cat /tmp/npm-whoami.err
+            exit 1
+          fi
+
+          TOKEN_USER=$(cat /tmp/npm-user.txt)
+          echo "Publishing package '$PKG_NAME' as npm user '$TOKEN_USER'"
+
+          PUBLISHED=$(npm view "$PKG_NAME" version 2>/dev/null || echo "none")
           if [ "$VERSION" = "$PUBLISHED" ]; then
             echo "Version $VERSION already published. Skipping."
             exit 0
           fi
+
+          if [ "$PUBLISHED" != "none" ]; then
+            OWNERS_JSON=$(npm view "$PKG_NAME" maintainers --json 2>/dev/null || echo "[]")
+            if ! node -e "const raw=process.argv[1];const user=process.argv[2];let owners=[];try{owners=JSON.parse(raw)}catch{};if(!Array.isArray(owners)) owners=owners?[owners]:[];const ok=owners.some(o=>o&&o.name===user);if(!ok) process.exit(1);" "$OWNERS_JSON" "$TOKEN_USER"; then
+              echo "::error::NPM user '$TOKEN_USER' is not a maintainer of '$PKG_NAME'."
+              echo "::error::Ask current maintainer to run: npm owner add $TOKEN_USER $PKG_NAME"
+              exit 1
+            fi
+          fi
+
           npm publish
 
   deploy-pages:
