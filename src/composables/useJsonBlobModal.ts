@@ -60,6 +60,8 @@ export const useJsonBlobModal = (options: UseJsonBlobModalOptions) => {
       showMinimap: store.showMinimap,
       showHistoryPanel: store.showHistoryPanel,
       canvasBackground: store.canvasBackground,
+      pageSpacingX: store.pageSpacingX,
+      pageSpacingY: store.pageSpacingY,
     };
 
     openModal(JSON.stringify(data, null, 2), t("preview.templateJson"), "json");
