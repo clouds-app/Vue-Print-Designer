@@ -54,7 +54,7 @@ jobs:
 
           if [ "$PUBLISHED" != "none" ]; then
             OWNERS_JSON=$(npm view "$PKG_NAME" maintainers --json 2>/dev/null || echo "[]")
-            if ! node -e "const raw=process.argv[1];const user=process.argv[2];let owners=[];try{owners=JSON.parse(raw)}catch{};if(!Array.isArray(owners)) owners=owners?[owners]:[];const ok=owners.some(o=>o&&o.name===user);if(!ok) process.exit(1);" "$OWNERS_JSON" "$TOKEN_USER"; then
+            if ! node -e "const raw=process.argv[1];const user=(process.argv[2]||'').trim().toLowerCase();let owners=[];try{owners=JSON.parse(raw)}catch{};if(!Array.isArray(owners)) owners=owners?[owners]:[];const names=owners.map((o)=>{if(typeof o==='string'){const m=o.match(/^\s*([^\s<]+)\s*(?:<.*>)?\s*$/);return (m?m[1]:o).trim().toLowerCase();}if(o&&typeof o==='object'){const v=(o.name||o.username||'').toString().trim().toLowerCase();return v;}return '';}).filter(Boolean);const ok=names.includes(user);if(!ok) process.exit(1);" "$OWNERS_JSON" "$TOKEN_USER"; then
               echo "::error::NPM user '$TOKEN_USER' is not a maintainer of '$PKG_NAME'."
               echo "::error::Ask current maintainer to run: npm owner add $TOKEN_USER $PKG_NAME"
               exit 1
