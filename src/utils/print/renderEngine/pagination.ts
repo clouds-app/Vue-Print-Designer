@@ -55,6 +55,21 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
         targetPage.appendChild(clone);
       }
     });
+
+    const cloneLineByRole = (role: "header" | "footer") => {
+      const line = sourcePage.querySelector<HTMLElement>(
+        `[data-print-line-role="${role}"]`,
+      );
+      if (!line) return;
+      targetPage.appendChild(line.cloneNode(true));
+    };
+
+    if (copyHeader) {
+      cloneLineByRole("header");
+    }
+    if (copyFooter) {
+      cloneLineByRole("footer");
+    }
   };
 
   // 更新表格页内汇总（执行自定义脚本并回写 tfoot）。

@@ -4,6 +4,7 @@ import cloneDeep from "lodash/cloneDeep";
 import {
   type DesignerState,
   type PrintElement,
+  type TableColumn,
   type Page,
   type Guide,
   ElementType,
@@ -372,6 +373,168 @@ const normalizeDesignerFontOptions = (
   return normalized;
 };
 
+const getEffectiveTableColumns = (
+  element: PrintElement,
+  testData: Record<string, any> | null | undefined,
+): TableColumn[] => {
+  let effectiveColumns = element.columns || [];
+  if (element.columnsVariable && testData) {
+    const key = normalizeVariableKey(element.columnsVariable);
+    if (key && Array.isArray(testData[key])) {
+      effectiveColumns = testData[key];
+    }
+  }
+
+  return effectiveColumns;
+};
+
+const getNumericCellStyleHeight = (cellValue: any) => {
+  const height = cellValue?.style?.height;
+  if (typeof height === "number" && Number.isFinite(height) && height > 0) {
+    return height;
+  }
+
+  if (typeof height === "string") {
+    const parsed = Number.parseFloat(height);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  }
+
+  return undefined;
+};
+
+const getTableRowExplicitHeight = (row: any, columns: TableColumn[]) => {
+  if (!row) return undefined;
+
+  for (const col of columns) {
+    const height = getNumericCellStyleHeight(row[col.field]);
+    if (height !== undefined) return height;
+  }
+
+  return undefined;
+};
+
+type HeaderFooterLineStyle = "solid" | "dashed" | "dotted";
+type HeaderFooterLineSpanMode = "value" | "percent";
+
+const isHeaderFooterLineStyle = (
+  value: unknown,
+): value is HeaderFooterLineStyle => {
+  return value === "solid" || value === "dashed" || value === "dotted";
+};
+
+const normalizeHeaderFooterLineStyle = (
+  value: unknown,
+): HeaderFooterLineStyle => {
+  return isHeaderFooterLineStyle(value) ? value : "dashed";
+};
+
+const normalizeHeaderFooterLineColor = (value: unknown) => {
+  if (typeof value !== "string") return "#f87171";
+  const color = value.trim();
+  return color ? color : "#f87171";
+};
+
+const normalizeHeaderFooterLineWidth = (value: unknown) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(1, Math.round(numeric));
+};
+
+const normalizeHeaderFooterLineSpanMode = (
+  value: unknown,
+): HeaderFooterLineSpanMode => {
+  return value === "percent" ? "percent" : "value";
+};
+
+const normalizeHeaderFooterLineSpan = (
+  value: unknown,
+  mode: HeaderFooterLineSpanMode,
+) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return mode === "percent" ? 100 : 100;
+  if (mode === "percent") {
+    return Math.min(100, Math.max(1, Number(numeric.toFixed(2))));
+  }
+  return Math.max(1, Math.round(numeric));
+};
+
+const normalizeHeaderFooterLineRenderingEnabled = (value: unknown) => {
+  return Boolean(value);
+};
+
+const escapeAttributeSelectorValue = (value: string) => {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"');
+};
+
+const getCellBorderInsetRect = (
+  cellEl: HTMLElement,
+  hostRect: DOMRect,
+  zoom: number,
+) => {
+  const rect = cellEl.getBoundingClientRect();
+  const style = window.getComputedStyle(cellEl);
+  const toViewportPx = (value: string) => {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed * zoom : 0;
+  };
+
+  return {
+    left: Math.max(
+      rect.left + toViewportPx(style.borderLeftWidth),
+      hostRect.left,
+    ),
+    top: Math.max(rect.top + toViewportPx(style.borderTopWidth), hostRect.top),
+    right: Math.min(
+      rect.right - toViewportPx(style.borderRightWidth),
+      hostRect.right,
+    ),
+    bottom: Math.min(
+      rect.bottom - toViewportPx(style.borderBottomWidth),
+      hostRect.bottom,
+    ),
+  };
+};
+
+const querySelectorAcrossDocumentAndShadowRoots = (selector: string) => {
+  const directHit = document.querySelector(selector) as HTMLElement | null;
+  if (directHit) return directHit;
+
+  const visited = new Set<Document | ShadowRoot>([document]);
+  const queue: Array<Document | ShadowRoot> = [document];
+
+  while (queue.length > 0) {
+    const root = queue.shift()!;
+    const hosts = root.querySelectorAll("*");
+
+    for (const host of hosts) {
+      const shadow = (host as HTMLElement).shadowRoot;
+      if (!shadow || visited.has(shadow)) continue;
+
+      const hit = shadow.querySelector(selector) as HTMLElement | null;
+      if (hit) return hit;
+
+      visited.add(shadow);
+      queue.push(shadow);
+    }
+  }
+
+  return null;
+};
+
+type EmbeddedCellBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type EffectiveTableRows = {
+  rows: any[];
+  layoutRows: any[];
+};
+
 export const useDesignerStore = defineStore("designer", {
   state: (): DesignerState => ({
     unit:
@@ -420,6 +583,17 @@ export const useDesignerStore = defineStore("designer", {
     footerHeight: 100,
     showHeaderLine: false,
     showFooterLine: false,
+    enableHeaderFooterLineRendering: false,
+    headerLineStyle: "dashed",
+    footerLineStyle: "dashed",
+    headerLineColor: "#f87171",
+    footerLineColor: "#f87171",
+    headerLineWidth: 1,
+    footerLineWidth: 1,
+    headerLineSpanMode: "percent",
+    footerLineSpanMode: "percent",
+    headerLineSpan: 100,
+    footerLineSpan: 100,
     showMinimap: false,
     showHistoryPanel: false,
     showTextQuickToolbar: loadTextQuickToolbarEnabled(),
@@ -561,6 +735,17 @@ export const useDesignerStore = defineStore("designer", {
       this.footerHeight = 100;
       this.showHeaderLine = false;
       this.showFooterLine = false;
+      this.enableHeaderFooterLineRendering = false;
+      this.headerLineStyle = "dashed";
+      this.footerLineStyle = "dashed";
+      this.headerLineColor = "#f87171";
+      this.footerLineColor = "#f87171";
+      this.headerLineWidth = 1;
+      this.footerLineWidth = 1;
+      this.headerLineSpanMode = "percent";
+      this.footerLineSpanMode = "percent";
+      this.headerLineSpan = 100;
+      this.footerLineSpan = 100;
       this.canvasBackground = "#ffffff";
       this.pageSpacingX = 0;
       this.pageSpacingY = 0;
@@ -597,6 +782,17 @@ export const useDesignerStore = defineStore("designer", {
           footerHeight: this.footerHeight,
           showHeaderLine: this.showHeaderLine,
           showFooterLine: this.showFooterLine,
+          enableHeaderFooterLineRendering: this.enableHeaderFooterLineRendering,
+          headerLineStyle: this.headerLineStyle,
+          footerLineStyle: this.footerLineStyle,
+          headerLineColor: this.headerLineColor,
+          footerLineColor: this.footerLineColor,
+          headerLineWidth: this.headerLineWidth,
+          footerLineWidth: this.footerLineWidth,
+          headerLineSpanMode: this.headerLineSpanMode,
+          footerLineSpanMode: this.footerLineSpanMode,
+          headerLineSpan: this.headerLineSpan,
+          footerLineSpan: this.footerLineSpan,
           showMinimap: this.showMinimap,
           showHistoryPanel: this.showHistoryPanel,
           canvasBackground: this.canvasBackground,
@@ -657,6 +853,42 @@ export const useDesignerStore = defineStore("designer", {
       this.footerHeight = snapshot.footerHeight;
       this.showHeaderLine = snapshot.showHeaderLine;
       this.showFooterLine = snapshot.showFooterLine;
+      this.enableHeaderFooterLineRendering =
+        normalizeHeaderFooterLineRenderingEnabled(
+          snapshot.enableHeaderFooterLineRendering,
+        );
+      this.headerLineStyle = normalizeHeaderFooterLineStyle(
+        snapshot.headerLineStyle,
+      );
+      this.footerLineStyle = normalizeHeaderFooterLineStyle(
+        snapshot.footerLineStyle,
+      );
+      this.headerLineColor = normalizeHeaderFooterLineColor(
+        snapshot.headerLineColor,
+      );
+      this.footerLineColor = normalizeHeaderFooterLineColor(
+        snapshot.footerLineColor,
+      );
+      this.headerLineWidth = normalizeHeaderFooterLineWidth(
+        snapshot.headerLineWidth,
+      );
+      this.footerLineWidth = normalizeHeaderFooterLineWidth(
+        snapshot.footerLineWidth,
+      );
+      this.headerLineSpanMode = normalizeHeaderFooterLineSpanMode(
+        snapshot.headerLineSpanMode,
+      );
+      this.footerLineSpanMode = normalizeHeaderFooterLineSpanMode(
+        snapshot.footerLineSpanMode,
+      );
+      this.headerLineSpan = normalizeHeaderFooterLineSpan(
+        snapshot.headerLineSpan,
+        this.headerLineSpanMode,
+      );
+      this.footerLineSpan = normalizeHeaderFooterLineSpan(
+        snapshot.footerLineSpan,
+        this.footerLineSpanMode,
+      );
       this.showMinimap = snapshot.showMinimap;
       this.showHistoryPanel = snapshot.showHistoryPanel;
       this.canvasBackground = snapshot.canvasBackground;
@@ -1054,7 +1286,8 @@ export const useDesignerStore = defineStore("designer", {
     },
     setSelectedCellsTextAlign(align: "left" | "center" | "right") {
       if (!this.isTemplateEditable) return;
-      if (!this.tableSelection || this.tableSelection.cells.length === 0) return;
+      if (!this.tableSelection || this.tableSelection.cells.length === 0)
+        return;
 
       const { elementId, cells } = this.tableSelection;
       const section = cells[0].section || "body";
@@ -1085,7 +1318,13 @@ export const useDesignerStore = defineStore("designer", {
         const row = newData[c.rowIndex];
         if (!row) return false;
         const val = row[c.colField];
-        if (val && typeof val === "object" && val.style && val.style.textAlign === align) return true;
+        if (
+          val &&
+          typeof val === "object" &&
+          val.style &&
+          val.style.textAlign === align
+        )
+          return true;
         return false;
       });
 
@@ -1120,6 +1359,232 @@ export const useDesignerStore = defineStore("designer", {
         [targetDataKey]: newData,
       };
     },
+    updateSelectedTableCellsStyle(style: Partial<any>) {
+      if (!this.isTemplateEditable) return;
+      if (!this.tableSelection || this.tableSelection.cells.length === 0)
+        return;
+
+      const { elementId, cells } = this.tableSelection;
+      let element: PrintElement | null = null;
+      let pageIndex = -1;
+      let elementIndex = -1;
+
+      for (let i = 0; i < this.pages.length; i++) {
+        const idx = this.pages[i].elements.findIndex((e) => e.id === elementId);
+        if (idx !== -1) {
+          element = this.pages[i].elements[idx];
+          pageIndex = i;
+          elementIndex = idx;
+          break;
+        }
+      }
+
+      if (!element || element.locked || element.type !== ElementType.TABLE)
+        return;
+
+      const nextRowsByKey: Partial<Record<"data" | "footerData", any[]>> = {};
+      let hasChanges = false;
+
+      const getRows = (targetDataKey: "data" | "footerData") => {
+        if (!nextRowsByKey[targetDataKey]) {
+          nextRowsByKey[targetDataKey] = cloneDeep(
+            element![targetDataKey] || [],
+          );
+        }
+        return nextRowsByKey[targetDataKey]!;
+      };
+
+      for (const cell of cells) {
+        const targetDataKey =
+          (cell.section || "body") === "footer" ? "footerData" : "data";
+        const nextRows = getRows(targetDataKey);
+        if (!nextRows[cell.rowIndex]) nextRows[cell.rowIndex] = {};
+
+        const row = nextRows[cell.rowIndex];
+        const currentValue = row[cell.colField];
+        const cellObject =
+          currentValue && typeof currentValue === "object"
+            ? { ...currentValue }
+            : { value: currentValue !== undefined ? currentValue : "" };
+        const nextStyle = { ...(cellObject.style || {}) };
+
+        for (const [key, value] of Object.entries(style)) {
+          if (value === undefined || value === null || value === "") {
+            delete nextStyle[key];
+          } else {
+            nextStyle[key] = value;
+          }
+        }
+
+        if (Object.keys(nextStyle).length > 0) {
+          cellObject.style = nextStyle;
+        } else {
+          delete cellObject.style;
+        }
+
+        row[cell.colField] = cellObject;
+        hasChanges = true;
+      }
+
+      if (!hasChanges) return;
+
+      this.snapshot(HISTORY_ACTION.ELEMENT_STYLE);
+      this.pages[pageIndex].elements[elementIndex] = {
+        ...element,
+        ...(nextRowsByKey.data ? { data: nextRowsByKey.data } : {}),
+        ...(nextRowsByKey.footerData
+          ? { footerData: nextRowsByKey.footerData }
+          : {}),
+      };
+    },
+    getSelectedTableRowsHeight() {
+      if (!this.tableSelection || this.tableSelection.cells.length === 0) {
+        return undefined;
+      }
+
+      const { elementId, cells } = this.tableSelection;
+      let element: PrintElement | null = null;
+
+      for (let i = 0; i < this.pages.length; i++) {
+        const found = this.pages[i].elements.find((e) => e.id === elementId);
+        if (found) {
+          element = found;
+          break;
+        }
+      }
+
+      if (!element || element.type !== ElementType.TABLE) return undefined;
+
+      const columns = getEffectiveTableColumns(element, this.testData);
+      if (columns.length === 0) return undefined;
+
+      const rowKeys = new Set<string>();
+      const heights: number[] = [];
+
+      for (const cell of cells) {
+        const section = cell.section || "body";
+        const rowKey = `${section}:${cell.rowIndex}`;
+        if (rowKeys.has(rowKey)) continue;
+        rowKeys.add(rowKey);
+
+        const rows = section === "footer" ? element.footerData : element.data;
+        const row = rows?.[cell.rowIndex];
+        const explicitHeight = getTableRowExplicitHeight(row, columns);
+        const fallbackHeight =
+          section === "footer"
+            ? Number(element.style.footerHeight) || 0
+            : Number(element.style.rowHeight) || 0;
+        const height =
+          explicitHeight ?? (fallbackHeight > 0 ? fallbackHeight : undefined);
+
+        if (height === undefined) return undefined;
+        heights.push(height);
+      }
+
+      if (heights.length === 0) return undefined;
+      const firstHeight = heights[0];
+      return heights.every((height) => Math.abs(height - firstHeight) < 0.01)
+        ? firstHeight
+        : undefined;
+    },
+    updateSelectedTableRowsHeight(height: number) {
+      if (!this.isTemplateEditable) return;
+      if (!this.tableSelection || this.tableSelection.cells.length === 0)
+        return;
+
+      const nextHeight = Number(height);
+      if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
+
+      const { elementId, cells } = this.tableSelection;
+      let element: PrintElement | null = null;
+      let pageIndex = -1;
+      let elementIndex = -1;
+
+      for (let i = 0; i < this.pages.length; i++) {
+        const idx = this.pages[i].elements.findIndex((e) => e.id === elementId);
+        if (idx !== -1) {
+          element = this.pages[i].elements[idx];
+          pageIndex = i;
+          elementIndex = idx;
+          break;
+        }
+      }
+
+      if (!element || element.locked || element.type !== ElementType.TABLE)
+        return;
+
+      const columns = getEffectiveTableColumns(element, this.testData);
+      if (columns.length === 0) return;
+
+      const targetRowsByKey: Record<"data" | "footerData", Set<number>> = {
+        data: new Set<number>(),
+        footerData: new Set<number>(),
+      };
+
+      cells.forEach((cell) => {
+        const targetDataKey =
+          (cell.section || "body") === "footer" ? "footerData" : "data";
+        targetRowsByKey[targetDataKey].add(cell.rowIndex);
+      });
+
+      const nextRowsByKey: Partial<Record<"data" | "footerData", any[]>> = {};
+      let hasChanges = false;
+
+      const getRows = (targetDataKey: "data" | "footerData") => {
+        if (!nextRowsByKey[targetDataKey]) {
+          nextRowsByKey[targetDataKey] = cloneDeep(
+            element![targetDataKey] || [],
+          );
+        }
+        return nextRowsByKey[targetDataKey]!;
+      };
+
+      const applyHeightToRow = (
+        targetDataKey: "data" | "footerData",
+        rowIndex: number,
+      ) => {
+        const nextRows = getRows(targetDataKey);
+        if (!nextRows[rowIndex]) nextRows[rowIndex] = {};
+
+        const row = nextRows[rowIndex];
+        columns.forEach((col) => {
+          const currentValue = row[col.field];
+          const cellObject =
+            currentValue && typeof currentValue === "object"
+              ? { ...currentValue }
+              : { value: currentValue !== undefined ? currentValue : "" };
+          const currentHeight = getNumericCellStyleHeight(cellObject);
+          cellObject.style = {
+            ...(cellObject.style || {}),
+            height: nextHeight,
+          };
+
+          if (currentHeight !== nextHeight) {
+            hasChanges = true;
+          }
+
+          row[col.field] = cellObject;
+        });
+      };
+
+      targetRowsByKey.data.forEach((rowIndex) => {
+        applyHeightToRow("data", rowIndex);
+      });
+      targetRowsByKey.footerData.forEach((rowIndex) => {
+        applyHeightToRow("footerData", rowIndex);
+      });
+
+      if (!hasChanges) return;
+
+      this.snapshot(HISTORY_ACTION.ELEMENT_STYLE);
+      this.pages[pageIndex].elements[elementIndex] = {
+        ...element,
+        ...(nextRowsByKey.data ? { data: nextRowsByKey.data } : {}),
+        ...(nextRowsByKey.footerData
+          ? { footerData: nextRowsByKey.footerData }
+          : {}),
+      };
+    },
     setHeaderHeight(height: number) {
       if (!this.isTemplateEditable) return;
       this.headerHeight = height;
@@ -1133,6 +1598,65 @@ export const useDesignerStore = defineStore("designer", {
     },
     setShowFooterLine(show: boolean) {
       this.showFooterLine = show;
+    },
+    setEnableHeaderFooterLineRendering(enable: boolean) {
+      if (!this.isTemplateEditable) return;
+      this.enableHeaderFooterLineRendering =
+        normalizeHeaderFooterLineRenderingEnabled(enable);
+    },
+    setHeaderLineStyle(style: HeaderFooterLineStyle) {
+      if (!this.isTemplateEditable) return;
+      this.headerLineStyle = normalizeHeaderFooterLineStyle(style);
+    },
+    setFooterLineStyle(style: HeaderFooterLineStyle) {
+      if (!this.isTemplateEditable) return;
+      this.footerLineStyle = normalizeHeaderFooterLineStyle(style);
+    },
+    setHeaderLineColor(color: string) {
+      if (!this.isTemplateEditable) return;
+      this.headerLineColor = normalizeHeaderFooterLineColor(color);
+    },
+    setFooterLineColor(color: string) {
+      if (!this.isTemplateEditable) return;
+      this.footerLineColor = normalizeHeaderFooterLineColor(color);
+    },
+    setHeaderLineWidth(width: number) {
+      if (!this.isTemplateEditable) return;
+      this.headerLineWidth = normalizeHeaderFooterLineWidth(width);
+    },
+    setFooterLineWidth(width: number) {
+      if (!this.isTemplateEditable) return;
+      this.footerLineWidth = normalizeHeaderFooterLineWidth(width);
+    },
+    setHeaderLineSpanMode(mode: HeaderFooterLineSpanMode) {
+      if (!this.isTemplateEditable) return;
+      this.headerLineSpanMode = normalizeHeaderFooterLineSpanMode(mode);
+      this.headerLineSpan = normalizeHeaderFooterLineSpan(
+        this.headerLineSpan,
+        this.headerLineSpanMode,
+      );
+    },
+    setFooterLineSpanMode(mode: HeaderFooterLineSpanMode) {
+      if (!this.isTemplateEditable) return;
+      this.footerLineSpanMode = normalizeHeaderFooterLineSpanMode(mode);
+      this.footerLineSpan = normalizeHeaderFooterLineSpan(
+        this.footerLineSpan,
+        this.footerLineSpanMode,
+      );
+    },
+    setHeaderLineSpan(span: number) {
+      if (!this.isTemplateEditable) return;
+      this.headerLineSpan = normalizeHeaderFooterLineSpan(
+        span,
+        this.headerLineSpanMode,
+      );
+    },
+    setFooterLineSpan(span: number) {
+      if (!this.isTemplateEditable) return;
+      this.footerLineSpan = normalizeHeaderFooterLineSpan(
+        span,
+        this.footerLineSpanMode,
+      );
     },
     setShowMinimap(show: boolean) {
       this.showMinimap = show;
@@ -1195,6 +1719,64 @@ export const useDesignerStore = defineStore("designer", {
       }
       if (typeof data.showFooterLine === "boolean") {
         this.showFooterLine = data.showFooterLine;
+      }
+      if (typeof data.enableHeaderFooterLineRendering === "boolean") {
+        this.enableHeaderFooterLineRendering =
+          normalizeHeaderFooterLineRenderingEnabled(
+            data.enableHeaderFooterLineRendering,
+          );
+      }
+      if (typeof data.headerLineStyle === "string") {
+        this.headerLineStyle = normalizeHeaderFooterLineStyle(
+          data.headerLineStyle,
+        );
+      }
+      if (typeof data.footerLineStyle === "string") {
+        this.footerLineStyle = normalizeHeaderFooterLineStyle(
+          data.footerLineStyle,
+        );
+      }
+      if (typeof data.headerLineColor === "string") {
+        this.headerLineColor = normalizeHeaderFooterLineColor(
+          data.headerLineColor,
+        );
+      }
+      if (typeof data.footerLineColor === "string") {
+        this.footerLineColor = normalizeHeaderFooterLineColor(
+          data.footerLineColor,
+        );
+      }
+      if (data.headerLineWidth !== undefined) {
+        this.headerLineWidth = normalizeHeaderFooterLineWidth(
+          data.headerLineWidth,
+        );
+      }
+      if (data.footerLineWidth !== undefined) {
+        this.footerLineWidth = normalizeHeaderFooterLineWidth(
+          data.footerLineWidth,
+        );
+      }
+      if (typeof data.headerLineSpanMode === "string") {
+        this.headerLineSpanMode = normalizeHeaderFooterLineSpanMode(
+          data.headerLineSpanMode,
+        );
+      }
+      if (typeof data.footerLineSpanMode === "string") {
+        this.footerLineSpanMode = normalizeHeaderFooterLineSpanMode(
+          data.footerLineSpanMode,
+        );
+      }
+      if (data.headerLineSpan !== undefined) {
+        this.headerLineSpan = normalizeHeaderFooterLineSpan(
+          data.headerLineSpan,
+          this.headerLineSpanMode,
+        );
+      }
+      if (data.footerLineSpan !== undefined) {
+        this.footerLineSpan = normalizeHeaderFooterLineSpan(
+          data.footerLineSpan,
+          this.footerLineSpanMode,
+        );
       }
       if (typeof data.showMinimap === "boolean") {
         this.showMinimap = data.showMinimap;
@@ -1376,6 +1958,375 @@ export const useDesignerStore = defineStore("designer", {
         originBounds,
       };
     },
+    getTableElementById(tableId: string) {
+      if (!tableId) return null;
+
+      for (const page of this.pages) {
+        const table = page.elements.find(
+          (element) =>
+            element.id === tableId && element.type === ElementType.TABLE,
+        );
+        if (table) return table;
+      }
+
+      return null;
+    },
+    getEffectiveTableRows(
+      table: PrintElement,
+      section: "body" | "footer",
+    ): EffectiveTableRows {
+      const layoutRows =
+        section === "footer"
+          ? Array.isArray(table.footerData)
+            ? table.footerData
+            : []
+          : Array.isArray(table.data)
+            ? table.data
+            : [];
+
+      if (section === "footer" && table.footerDataVariable && this.testData) {
+        const key = normalizeVariableKey(table.footerDataVariable);
+        const rows = key ? this.testData[key] : undefined;
+        if (Array.isArray(rows)) {
+          return { rows, layoutRows };
+        }
+      }
+
+      if (section === "body" && table.variable && this.testData) {
+        const key = normalizeVariableKey(table.variable);
+        const rows = key ? this.testData[key] : undefined;
+        if (Array.isArray(rows)) {
+          return { rows, layoutRows };
+        }
+      }
+
+      return {
+        rows: layoutRows,
+        layoutRows,
+      };
+    },
+    getTableColumnPixelWidths(table: PrintElement, columns: TableColumn[]) {
+      const colCount = Math.max(1, columns.length || 1);
+
+      return columns.map((column) => {
+        const width =
+          typeof column.width === "number" &&
+          Number.isFinite(column.width) &&
+          column.width > 0
+            ? column.width
+            : Math.max(20, Math.floor(table.width / colCount));
+
+        return {
+          field: column.field,
+          width: Math.max(0, width),
+        };
+      });
+    },
+    getTableSectionRowHeight(
+      table: PrintElement,
+      section: "body" | "footer",
+      rowIndex: number,
+      columns: TableColumn[],
+      rows: any[],
+      layoutRows: any[],
+    ) {
+      const row = layoutRows[rowIndex] ?? rows[rowIndex];
+      const explicitHeight =
+        getTableRowExplicitHeight(row, columns) ??
+        getTableRowExplicitHeight(rows[rowIndex], columns);
+
+      const fallbackRaw =
+        section === "footer"
+          ? Number(table.style.footerHeight) || 0
+          : Number(table.style.rowHeight) || 0;
+      const fallback = fallbackRaw > 0 ? fallbackRaw : 32;
+
+      return explicitHeight ?? fallback;
+    },
+    getEmbeddedElementCellBounds(
+      element: PrintElement,
+    ): EmbeddedCellBounds | null {
+      const tableId = element.embeddedInTableId;
+      const cellRef = element.embeddedInTableCell;
+      if (!tableId || !cellRef) return null;
+
+      const rowIndex = Number(cellRef.rowIndex);
+      if (!Number.isFinite(rowIndex)) return null;
+
+      const section = cellRef.section === "footer" ? "footer" : "body";
+
+      const table = this.getTableElementById(tableId);
+      if (!table) return null;
+
+      const escapedTableId = escapeAttributeSelectorValue(tableId);
+      const tableWrapper = querySelectorAcrossDocumentAndShadowRoots(
+        `.element-wrapper[data-element-id="${escapedTableId}"]`,
+      );
+
+      if (tableWrapper) {
+        const escapedColField = escapeAttributeSelectorValue(cellRef.colField);
+        const escapedRowIndex = escapeAttributeSelectorValue(String(rowIndex));
+        const matchedCell = tableWrapper.querySelector(
+          `td[data-field="${escapedColField}"][data-row-index="${escapedRowIndex}"][data-section="${section}"]`,
+        ) as HTMLElement | null;
+
+        if (matchedCell) {
+          const zoom = this.zoom || 1;
+          const wrapperRect = tableWrapper.getBoundingClientRect();
+          const visibleRect = getCellBorderInsetRect(
+            matchedCell,
+            wrapperRect,
+            zoom,
+          );
+          const width =
+            Math.max(0, visibleRect.right - visibleRect.left) / zoom;
+          const height =
+            Math.max(0, visibleRect.bottom - visibleRect.top) / zoom;
+
+          if (width > 0 && height > 0) {
+            return {
+              x: table.x + (visibleRect.left - wrapperRect.left) / zoom,
+              y: table.y + (visibleRect.top - wrapperRect.top) / zoom,
+              width,
+              height,
+            };
+          }
+        }
+      }
+
+      const columns = getEffectiveTableColumns(table, this.testData);
+      if (columns.length === 0) return null;
+
+      const columnWidths = this.getTableColumnPixelWidths(table, columns);
+      const columnIndex = columnWidths.findIndex(
+        (column) => column.field === cellRef.colField,
+      );
+      if (columnIndex < 0) return null;
+
+      if (section === "footer" && table.showFooter !== true) return null;
+
+      const bodyRows = this.getEffectiveTableRows(table, "body");
+      const footerRows = this.getEffectiveTableRows(table, "footer");
+      const sectionRows = section === "footer" ? footerRows : bodyRows;
+      const rowCount =
+        sectionRows.rows.length > 0
+          ? sectionRows.rows.length
+          : sectionRows.layoutRows.length;
+
+      if (rowIndex < 0 || rowIndex >= rowCount) {
+        return null;
+      }
+
+      let x = table.x;
+      for (let i = 0; i < columnIndex; i += 1) {
+        x += columnWidths[i].width;
+      }
+
+      const getBodyRowHeight = (index: number) =>
+        this.getTableSectionRowHeight(
+          table,
+          "body",
+          index,
+          columns,
+          bodyRows.rows,
+          bodyRows.layoutRows,
+        );
+
+      const getFooterRowHeight = (index: number) =>
+        this.getTableSectionRowHeight(
+          table,
+          "footer",
+          index,
+          columns,
+          footerRows.rows,
+          footerRows.layoutRows,
+        );
+
+      let y = table.y;
+      if (table.showHeader !== false) {
+        const headerHeightRaw = Number(table.style.headerHeight) || 0;
+        y += headerHeightRaw > 0 ? headerHeightRaw : 32;
+      }
+
+      if (section === "body") {
+        for (let i = 0; i < rowIndex; i += 1) {
+          y += getBodyRowHeight(i);
+        }
+      } else {
+        const bodyRowCount =
+          bodyRows.rows.length > 0
+            ? bodyRows.rows.length
+            : bodyRows.layoutRows.length;
+        for (let i = 0; i < bodyRowCount; i += 1) {
+          y += getBodyRowHeight(i);
+        }
+        for (let i = 0; i < rowIndex; i += 1) {
+          y += getFooterRowHeight(i);
+        }
+      }
+
+      const layoutRow = sectionRows.layoutRows[rowIndex];
+      const dataRow = sectionRows.rows[rowIndex];
+      const layoutCell =
+        layoutRow && typeof layoutRow === "object"
+          ? layoutRow[cellRef.colField]
+          : undefined;
+      const dataCell =
+        dataRow && typeof dataRow === "object"
+          ? dataRow[cellRef.colField]
+          : undefined;
+      const cell =
+        layoutCell && typeof layoutCell === "object"
+          ? layoutCell
+          : dataCell && typeof dataCell === "object"
+            ? dataCell
+            : null;
+
+      const rawColSpan =
+        typeof cell?.colSpan === "number" && Number.isFinite(cell.colSpan)
+          ? Math.floor(cell.colSpan)
+          : 1;
+      const rawRowSpan =
+        typeof cell?.rowSpan === "number" && Number.isFinite(cell.rowSpan)
+          ? Math.floor(cell.rowSpan)
+          : 1;
+
+      if (rawColSpan <= 0 || rawRowSpan <= 0) return null;
+
+      const colSpan = Math.max(1, rawColSpan);
+      const rowSpan = Math.max(1, rawRowSpan);
+
+      let width = 0;
+      const endColumnIndex = Math.min(
+        columnWidths.length,
+        columnIndex + colSpan,
+      );
+      for (let i = columnIndex; i < endColumnIndex; i += 1) {
+        width += columnWidths[i].width;
+      }
+
+      let height = 0;
+      const endRowIndex = Math.min(rowCount, rowIndex + rowSpan);
+      for (let i = rowIndex; i < endRowIndex; i += 1) {
+        height +=
+          section === "footer" ? getFooterRowHeight(i) : getBodyRowHeight(i);
+      }
+
+      if (width <= 0 || height <= 0) return null;
+
+      return {
+        x,
+        y,
+        width,
+        height,
+      };
+    },
+    constrainElementPositionToBounds(
+      element: PrintElement,
+      x: number,
+      y: number,
+      bounds: EmbeddedCellBounds,
+    ) {
+      const maxX = bounds.x + Math.max(0, bounds.width - element.width);
+      const maxY = bounds.y + Math.max(0, bounds.height - element.height);
+
+      return {
+        x: Math.min(Math.max(bounds.x, x), maxX),
+        y: Math.min(Math.max(bounds.y, y), maxY),
+      };
+    },
+    moveEmbeddedElementsByTableDelta(
+      tableDeltaById: Map<string, { dx: number; dy: number }>,
+      options?: { excludeIds?: Set<string> },
+    ) {
+      if (tableDeltaById.size === 0) return;
+
+      const excludeIds = options?.excludeIds || new Set<string>();
+      for (const page of this.pages) {
+        for (let index = 0; index < page.elements.length; index += 1) {
+          const element = page.elements[index];
+          if (excludeIds.has(element.id)) continue;
+
+          const tableId = element.embeddedInTableId;
+          if (!tableId) continue;
+
+          const delta = tableDeltaById.get(tableId);
+          if (!delta || (delta.dx === 0 && delta.dy === 0)) continue;
+
+          page.elements[index] = {
+            ...element,
+            x: element.x + delta.dx,
+            y: element.y + delta.dy,
+          };
+        }
+      }
+    },
+    ensureEmbeddedElementsAboveTables(tableIds?: Set<string>) {
+      const tableZIndexById = new Map<string, number>();
+
+      for (const page of this.pages) {
+        for (const element of page.elements) {
+          if (element.type !== ElementType.TABLE) continue;
+          if (tableIds && tableIds.size > 0 && !tableIds.has(element.id)) {
+            continue;
+          }
+
+          tableZIndexById.set(element.id, getElementZIndex(element));
+        }
+      }
+
+      if (tableZIndexById.size === 0) return;
+
+      for (const page of this.pages) {
+        for (let index = 0; index < page.elements.length; index += 1) {
+          const element = page.elements[index];
+          const tableId = element.embeddedInTableId;
+          if (!tableId) continue;
+
+          const tableZ = tableZIndexById.get(tableId);
+          if (tableZ === undefined) continue;
+
+          const currentZ = getElementZIndex(element);
+          if (currentZ > tableZ) continue;
+
+          page.elements[index] = {
+            ...element,
+            style: {
+              ...element.style,
+              zIndex: tableZ + 1,
+            },
+          };
+        }
+      }
+    },
+    isElementInHeaderOrFooterRegion(element: PrintElement) {
+      if (!this.showHeaderLine && !this.showFooterLine) return false;
+
+      const marginTop = this.pageSpacingY || 0;
+      const marginBottom = this.pageSpacingY || 0;
+      const headerBoundary = this.headerHeight + marginTop;
+      const footerBoundary =
+        this.canvasSize.height - (this.footerHeight + marginBottom);
+      const bounds = this.getElementBoundsAtPosition(
+        element,
+        element.x,
+        element.y,
+      );
+
+      const isHeader = this.showHeaderLine && bounds.maxY <= headerBoundary;
+      const isFooter = this.showFooterLine && bounds.minY >= footerBoundary;
+      return isHeader || isFooter;
+    },
+    normalizeTableForHeaderFooterRegion(element: PrintElement) {
+      if (element.type !== ElementType.TABLE) return element;
+      if (!this.isElementInHeaderOrFooterRegion(element)) return element;
+      if (element.autoPaginate !== true) return element;
+
+      return {
+        ...element,
+        autoPaginate: false,
+      };
+    },
     getSnapPosition(
       el: PrintElement,
       nx: number,
@@ -1492,10 +2443,24 @@ export const useDesignerStore = defineStore("designer", {
 
       const selectedSet = new Set(this.selectedElementIds);
       selectedSet.add(el.id);
+
+      const movingTableIds = new Set<string>();
+      if (activePageIndex >= 0) {
+        for (const item of this.pages[activePageIndex].elements) {
+          if (!selectedSet.has(item.id)) continue;
+          if (item.type === ElementType.TABLE) {
+            movingTableIds.add(item.id);
+          }
+        }
+      }
+
       const referenceElements =
         activePageIndex >= 0
           ? this.pages[activePageIndex].elements.filter(
-              (item) => !selectedSet.has(item.id),
+              (item) =>
+                !selectedSet.has(item.id) &&
+                (!item.embeddedInTableId ||
+                  !movingTableIds.has(item.embeddedInTableId)),
             )
           : [];
 
@@ -1872,16 +2837,28 @@ export const useDesignerStore = defineStore("designer", {
 
       if (dx === 0 && dy === 0) return;
 
+      const movedTableDeltaById = new Map<string, { dx: number; dy: number }>();
+      for (const item of movableElements) {
+        if (item.element.type !== ElementType.TABLE) continue;
+        movedTableDeltaById.set(item.element.id, { dx, dy });
+      }
+
       // 5. Apply constrained delta
       for (const item of movableElements) {
         const { pageIndex, elementIndex, element } = item;
         // Direct update to store state
-        this.pages[pageIndex].elements[elementIndex] = {
+        const movedElement = {
           ...element,
           x: element.x + dx,
           y: element.y + dy,
         };
+        this.pages[pageIndex].elements[elementIndex] =
+          this.normalizeTableForHeaderFooterRegion(movedElement);
       }
+
+      this.moveEmbeddedElementsByTableDelta(movedTableDeltaById, {
+        excludeIds: selectedSet,
+      });
     },
     nudgeSelectedElements(dx: number, dy: number) {
       if (!this.isTemplateEditable) return;
@@ -1972,26 +2949,48 @@ export const useDesignerStore = defineStore("designer", {
 
       if (actualDx === 0 && actualDy === 0) return;
 
+      const movedIdsSet = new Set(movableIds);
+      const movedTableDeltaById = new Map<string, { dx: number; dy: number }>();
+      for (const id of movableIds) {
+        for (const page of this.pages) {
+          const el = page.elements.find((item) => item.id === id);
+          if (!el) continue;
+          if (el.type === ElementType.TABLE) {
+            movedTableDeltaById.set(el.id, { dx: actualDx, dy: actualDy });
+          }
+          break;
+        }
+      }
+
       // 4. Move all movable elements by the constrained delta (Rigid Body)
       for (const id of movableIds) {
         for (const page of this.pages) {
           const index = page.elements.findIndex((e) => e.id === id);
           if (index !== -1) {
             const el = page.elements[index];
-            page.elements[index] = {
+            const movedElement = {
               ...el,
               x: el.x + actualDx,
               y: el.y + actualDy,
             };
+            page.elements[index] =
+              this.normalizeTableForHeaderFooterRegion(movedElement);
             break;
           }
         }
       }
+
+      this.moveEmbeddedElementsByTableDelta(movedTableDeltaById, {
+        excludeIds: movedIdsSet,
+      });
     },
     addElement(element: Omit<PrintElement, "id">, pageIndex?: number) {
       if (!this.isTemplateEditable) return;
       this.snapshot(HISTORY_ACTION.ELEMENT_ADD);
-      const newElement = { ...element, id: uuidv4() };
+      const newElement = this.normalizeTableForHeaderFooterRegion({
+        ...element,
+        id: uuidv4(),
+      });
       const targetPageIdx =
         pageIndex !== undefined &&
         pageIndex >= 0 &&
@@ -2026,29 +3025,67 @@ export const useDesignerStore = defineStore("designer", {
 
       if (!element || sourcePageIndex === -1) return;
 
+      if (targetPageIndex < 0 || targetPageIndex >= this.pages.length) {
+        return;
+      }
+
+      const originalX = element.x;
+      const originalY = element.y;
+      const deltaX = x - originalX;
+      const deltaY = y - originalY;
+      const movedTableId =
+        element.type === ElementType.TABLE ? element.id : null;
+
       // Remove from source
       this.pages[sourcePageIndex].elements.splice(elementIndex, 1);
 
-      // Update position
-      element.x = x;
-      element.y = y;
+      // Update position and apply table behavior rules for header/footer region.
+      const movedElement = this.normalizeTableForHeaderFooterRegion({
+        ...element,
+        x,
+        y,
+      });
 
-      // Add to target
-      if (targetPageIndex >= 0 && targetPageIndex < this.pages.length) {
-        this.pages[targetPageIndex].elements.push(element);
-        this.currentPageIndex = targetPageIndex;
-      } else {
-        // Fallback: put it back
-        this.pages[sourcePageIndex].elements.push(element);
+      this.pages[targetPageIndex].elements.push(movedElement);
+      this.currentPageIndex = targetPageIndex;
+
+      if (!movedTableId) return;
+
+      const embeddedChildren: PrintElement[] = [];
+      for (const page of this.pages) {
+        for (let index = page.elements.length - 1; index >= 0; index -= 1) {
+          const candidate = page.elements[index];
+          if (candidate.id === movedTableId) continue;
+          if (candidate.embeddedInTableId !== movedTableId) continue;
+
+          page.elements.splice(index, 1);
+          embeddedChildren.push({
+            ...candidate,
+            x: candidate.x + deltaX,
+            y: candidate.y + deltaY,
+          });
+        }
+      }
+
+      if (embeddedChildren.length > 0) {
+        this.pages[targetPageIndex].elements.push(...embeddedChildren);
       }
     },
     bringElementsToFront(ids: string[]) {
       if (!ids || ids.length === 0) return;
       const idSet = new Set(ids);
+      const selectedTableIds = new Set<string>();
       for (const page of this.pages) {
         const selectedInPage = page.elements.filter(
           (el) => idSet.has(el.id) && !el.locked,
         );
+
+        selectedInPage.forEach((el) => {
+          if (el.type === ElementType.TABLE) {
+            selectedTableIds.add(el.id);
+          }
+        });
+
         if (selectedInPage.length === 0) continue;
         let maxNonSelected = 0;
         for (const el of page.elements) {
@@ -2074,6 +3111,8 @@ export const useDesignerStore = defineStore("designer", {
           nextZ += 1;
         }
       }
+
+      this.ensureEmbeddedElementsAboveTables(selectedTableIds);
     },
     moveElementsLayer(ids: string[], mode: LayerMoveMode) {
       if (!this.isTemplateEditable) return;
@@ -2081,10 +3120,14 @@ export const useDesignerStore = defineStore("designer", {
 
       const idSet = new Set(ids);
       const unlockedIds = new Set<string>();
+      const selectedTableIds = new Set<string>();
       for (const page of this.pages) {
         for (const el of page.elements) {
           if (idSet.has(el.id) && !el.locked) {
             unlockedIds.add(el.id);
+            if (el.type === ElementType.TABLE) {
+              selectedTableIds.add(el.id);
+            }
           }
         }
       }
@@ -2128,6 +3171,8 @@ export const useDesignerStore = defineStore("designer", {
           };
         }
       }
+
+      this.ensureEmbeddedElementsAboveTables(selectedTableIds);
     },
     canMoveElementsLayer(ids: string[], mode: LayerMoveMode) {
       if (!this.isTemplateEditable) return false;
@@ -2223,39 +3268,86 @@ export const useDesignerStore = defineStore("designer", {
             }
           }
 
-          page.elements[index] = { ...page.elements[index], ...nextUpdates };
+          const mergedElement = { ...page.elements[index], ...nextUpdates };
+          const nextElement =
+            this.normalizeTableForHeaderFooterRegion(mergedElement);
+          page.elements[index] = nextElement;
+
+          const tableZIndexChanged =
+            el.type === ElementType.TABLE &&
+            getElementZIndex(nextElement) !== getElementZIndex(el);
+
+          if (el.type === ElementType.TABLE) {
+            const deltaX = nextElement.x - el.x;
+            const deltaY = nextElement.y - el.y;
+            if (deltaX !== 0 || deltaY !== 0) {
+              this.moveEmbeddedElementsByTableDelta(
+                new Map([[el.id, { dx: deltaX, dy: deltaY }]]),
+                { excludeIds: new Set([el.id]) },
+              );
+            }
+
+            if (tableZIndexChanged) {
+              this.ensureEmbeddedElementsAboveTables(new Set([el.id]));
+            }
+          }
+
           return;
         }
       }
     },
-    removeElement(id: string) {
-      if (!this.isTemplateEditable) return;
-      // Check if locked
-      for (const page of this.pages) {
-        const el = page.elements.find((e) => e.id === id);
-        if (el && el.locked) return;
-      }
+    collectElementIdsWithEmbeddedChildren(rootIds: Iterable<string>) {
+      const ids = new Set(rootIds);
+      let changed = true;
 
-      this.snapshot(HISTORY_ACTION.ELEMENT_REMOVE);
-      for (const page of this.pages) {
-        const index = page.elements.findIndex((e) => e.id === id);
-        if (index !== -1) {
-          page.elements.splice(index, 1);
-          if (this.selectedElementId === id) {
-            this.selectedElementId = null;
+      while (changed) {
+        changed = false;
+        for (const page of this.pages) {
+          for (const element of page.elements) {
+            if (!element.embeddedInTableId) continue;
+            if (!ids.has(element.embeddedInTableId)) continue;
+            if (ids.has(element.id)) continue;
+
+            ids.add(element.id);
+            changed = true;
           }
-          // Clear table selection if this element was selected
-          if (this.tableSelection && this.tableSelection.elementId === id) {
-            this.tableSelection = null;
-          }
-          // Remove from multi-selection
-          const multiIndex = this.selectedElementIds.indexOf(id);
-          if (multiIndex !== -1) {
-            this.selectedElementIds.splice(multiIndex, 1);
-          }
-          return;
         }
       }
+
+      return ids;
+    },
+    removeElement(id: string) {
+      if (!this.isTemplateEditable) return;
+      let targetElement: PrintElement | null = null;
+      for (const page of this.pages) {
+        const el = page.elements.find((e) => e.id === id);
+        if (!el) continue;
+        targetElement = el;
+        break;
+      }
+      if (!targetElement || targetElement.locked) return;
+
+      this.snapshot(HISTORY_ACTION.ELEMENT_REMOVE);
+      const idsToRemove = this.collectElementIdsWithEmbeddedChildren([id]);
+      for (const page of this.pages) {
+        for (let index = page.elements.length - 1; index >= 0; index -= 1) {
+          if (idsToRemove.has(page.elements[index].id)) {
+            page.elements.splice(index, 1);
+          }
+        }
+      }
+      if (this.selectedElementId && idsToRemove.has(this.selectedElementId)) {
+        this.selectedElementId = null;
+      }
+      if (
+        this.tableSelection &&
+        idsToRemove.has(this.tableSelection.elementId)
+      ) {
+        this.tableSelection = null;
+      }
+      this.selectedElementIds = this.selectedElementIds.filter(
+        (selectedId) => !idsToRemove.has(selectedId),
+      );
     },
     selectElement(
       id: string | null,
@@ -2394,7 +3486,9 @@ export const useDesignerStore = defineStore("designer", {
       if (removableIds.length === 0) return;
 
       this.snapshot(HISTORY_ACTION.ELEMENT_REMOVE);
-      for (const id of removableIds) {
+      const idsToRemove =
+        this.collectElementIdsWithEmbeddedChildren(removableIds);
+      for (const id of idsToRemove) {
         for (const page of this.pages) {
           const index = page.elements.findIndex((e) => e.id === id);
           if (index !== -1) {
@@ -2426,6 +3520,44 @@ export const useDesignerStore = defineStore("designer", {
       }
 
       if (elements.length === 0) return;
+
+      const normalElements: PrintElement[] = [];
+      const embeddedElements: Array<{
+        element: PrintElement;
+        bounds: EmbeddedCellBounds;
+      }> = [];
+
+      for (const element of elements) {
+        const isEmbeddedElement =
+          !!element.embeddedInTableId && !!element.embeddedInTableCell;
+        if (!isEmbeddedElement) {
+          normalElements.push(element);
+          continue;
+        }
+
+        const bounds = this.getEmbeddedElementCellBounds(element);
+        if (!bounds) continue;
+
+        embeddedElements.push({ element, bounds });
+      }
+
+      if (normalElements.length === 0 && embeddedElements.length === 0) {
+        return;
+      }
+
+      const selectedIdSet = new Set(this.selectedElementIds);
+      const tablePositionBeforeAlign = new Map<
+        string,
+        { element: PrintElement; x: number; y: number }
+      >();
+      for (const element of normalElements) {
+        if (element.type !== ElementType.TABLE) continue;
+        tablePositionBeforeAlign.set(element.id, {
+          element,
+          x: element.x,
+          y: element.y,
+        });
+      }
 
       this.snapshot(HISTORY_ACTION.ELEMENT_ALIGN);
 
@@ -2462,9 +3594,9 @@ export const useDesignerStore = defineStore("designer", {
         return null;
       };
 
-      if (elements.length === 1) {
+      if (normalElements.length === 1) {
         // Align to canvas (respecting margins)
-        const el = elements[0];
+        const el = normalElements[0];
         const verticalArea = getVerticalAlignmentArea(el) || {
           y: contentY,
           height: contentH,
@@ -2490,16 +3622,16 @@ export const useDesignerStore = defineStore("designer", {
             el.y = verticalArea.y + verticalArea.height - el.height;
             break;
         }
-      } else {
+      } else if (normalElements.length > 1) {
         // Align relative to selection bounds
-        const minX = Math.min(...elements.map((e) => e.x));
-        const maxX = Math.max(...elements.map((e) => e.x + e.width));
-        const minY = Math.min(...elements.map((e) => e.y));
-        const maxY = Math.max(...elements.map((e) => e.y + e.height));
+        const minX = Math.min(...normalElements.map((e) => e.x));
+        const maxX = Math.max(...normalElements.map((e) => e.x + e.width));
+        const minY = Math.min(...normalElements.map((e) => e.y));
+        const maxY = Math.max(...normalElements.map((e) => e.y + e.height));
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
 
-        elements.forEach((el) => {
+        normalElements.forEach((el) => {
           const verticalArea = getVerticalAlignmentArea(el);
 
           switch (type) {
@@ -2528,6 +3660,52 @@ export const useDesignerStore = defineStore("designer", {
           }
         });
       }
+
+      embeddedElements.forEach(({ element, bounds }) => {
+        let x = element.x;
+        let y = element.y;
+
+        switch (type) {
+          case "left":
+            x = bounds.x;
+            break;
+          case "center":
+            x = bounds.x + (bounds.width - element.width) / 2;
+            break;
+          case "right":
+            x = bounds.x + bounds.width - element.width;
+            break;
+          case "top":
+            y = bounds.y;
+            break;
+          case "middle":
+            y = bounds.y + (bounds.height - element.height) / 2;
+            break;
+          case "bottom":
+            y = bounds.y + bounds.height - element.height;
+            break;
+        }
+
+        const constrained = this.constrainElementPositionToBounds(
+          element,
+          x,
+          y,
+          bounds,
+        );
+        element.x = constrained.x;
+        element.y = constrained.y;
+      });
+
+      const movedTableDeltaById = new Map<string, { dx: number; dy: number }>();
+      for (const [tableId, before] of tablePositionBeforeAlign) {
+        const dx = before.element.x - before.x;
+        const dy = before.element.y - before.y;
+        if (dx === 0 && dy === 0) continue;
+        movedTableDeltaById.set(tableId, { dx, dy });
+      }
+      this.moveEmbeddedElementsByTableDelta(movedTableDeltaById, {
+        excludeIds: selectedIdSet,
+      });
     },
     matchSelectedElementsSize(mode: "width" | "height" | "both") {
       if (!this.isTemplateEditable) return;
@@ -2563,16 +3741,68 @@ export const useDesignerStore = defineStore("designer", {
       if (this.selectedElementIds.length < 3) return;
 
       const selectedSet = new Set(this.selectedElementIds);
-      const groups = this.pages
-        .map((page) =>
-          page.elements.filter((el) => selectedSet.has(el.id) && !el.locked),
-        )
-        .filter((elements) => elements.length >= 3);
+      const normalGroups: PrintElement[][] = [];
+      const embeddedGroupMap = new Map<
+        string,
+        Array<{ element: PrintElement; bounds: EmbeddedCellBounds }>
+      >();
 
-      if (groups.length === 0) return;
+      for (const page of this.pages) {
+        const normalElements: PrintElement[] = [];
+
+        for (const element of page.elements) {
+          if (!selectedSet.has(element.id) || element.locked) continue;
+
+          const isEmbeddedElement =
+            !!element.embeddedInTableId && !!element.embeddedInTableCell;
+          if (!isEmbeddedElement) {
+            normalElements.push(element);
+            continue;
+          }
+
+          const bounds = this.getEmbeddedElementCellBounds(element);
+          if (!bounds) continue;
+
+          const cell = element.embeddedInTableCell!;
+          const section = cell.section === "footer" ? "footer" : "body";
+          const groupKey = `${element.embeddedInTableId}|${section}|${cell.rowIndex}|${cell.colField}`;
+
+          if (!embeddedGroupMap.has(groupKey)) {
+            embeddedGroupMap.set(groupKey, []);
+          }
+
+          embeddedGroupMap.get(groupKey)!.push({ element, bounds });
+        }
+
+        if (normalElements.length >= 3) {
+          normalGroups.push(normalElements);
+        }
+      }
+
+      const embeddedGroups = Array.from(embeddedGroupMap.values()).filter(
+        (group) => group.length >= 3,
+      );
+
+      if (normalGroups.length === 0 && embeddedGroups.length === 0) return;
+
+      const tablePositionBeforeDistribute = new Map<
+        string,
+        { element: PrintElement; x: number; y: number }
+      >();
+      for (const elements of normalGroups) {
+        for (const element of elements) {
+          if (element.type !== ElementType.TABLE) continue;
+          if (tablePositionBeforeDistribute.has(element.id)) continue;
+          tablePositionBeforeDistribute.set(element.id, {
+            element,
+            x: element.x,
+            y: element.y,
+          });
+        }
+      }
 
       this.snapshot(HISTORY_ACTION.ELEMENT_ALIGN);
-      groups.forEach((elements) => {
+      normalGroups.forEach((elements) => {
         const sorted = [...elements].sort((a, b) => {
           const centerA =
             axis === "horizontal" ? a.x + a.width / 2 : a.y + a.height / 2;
@@ -2603,6 +3833,77 @@ export const useDesignerStore = defineStore("designer", {
             el.y = center - el.height / 2;
           }
         });
+      });
+
+      embeddedGroups.forEach((elements) => {
+        const sorted = [...elements].sort((a, b) => {
+          const centerA =
+            axis === "horizontal"
+              ? a.element.x + a.element.width / 2
+              : a.element.y + a.element.height / 2;
+          const centerB =
+            axis === "horizontal"
+              ? b.element.x + b.element.width / 2
+              : b.element.y + b.element.height / 2;
+          return centerA - centerB;
+        });
+
+        sorted.forEach((item) => {
+          const constrained = this.constrainElementPositionToBounds(
+            item.element,
+            item.element.x,
+            item.element.y,
+            item.bounds,
+          );
+          item.element.x = constrained.x;
+          item.element.y = constrained.y;
+        });
+
+        const first = sorted[0].element;
+        const last = sorted[sorted.length - 1].element;
+        const start =
+          axis === "horizontal"
+            ? first.x + first.width / 2
+            : first.y + first.height / 2;
+        const end =
+          axis === "horizontal"
+            ? last.x + last.width / 2
+            : last.y + last.height / 2;
+        const gap = (end - start) / (sorted.length - 1);
+
+        sorted.forEach((item, index) => {
+          if (index === 0 || index === sorted.length - 1) return;
+
+          const center = start + gap * index;
+          let x = item.element.x;
+          let y = item.element.y;
+
+          if (axis === "horizontal") {
+            x = center - item.element.width / 2;
+          } else {
+            y = center - item.element.height / 2;
+          }
+
+          const constrained = this.constrainElementPositionToBounds(
+            item.element,
+            x,
+            y,
+            item.bounds,
+          );
+          item.element.x = constrained.x;
+          item.element.y = constrained.y;
+        });
+      });
+
+      const movedTableDeltaById = new Map<string, { dx: number; dy: number }>();
+      for (const [tableId, before] of tablePositionBeforeDistribute) {
+        const dx = before.element.x - before.x;
+        const dy = before.element.y - before.y;
+        if (dx === 0 && dy === 0) continue;
+        movedTableDeltaById.set(tableId, { dx, dy });
+      }
+      this.moveEmbeddedElementsByTableDelta(movedTableDeltaById, {
+        excludeIds: selectedSet,
       });
     },
     resizeSelectedElements(dw: number, dh: number) {
@@ -2666,20 +3967,31 @@ export const useDesignerStore = defineStore("designer", {
       if (targetIds.length === 0) return;
 
       this.snapshot(HISTORY_ACTION.ELEMENT_STYLE);
+      const updatedTableIds = new Set<string>();
 
       for (const id of targetIds) {
         for (const page of this.pages) {
           const index = page.elements.findIndex((e) => e.id === id);
           if (index !== -1) {
             const el = page.elements[index];
-            page.elements[index] = {
+            const nextElement = {
               ...el,
               style: { ...el.style, ...style },
             };
+            page.elements[index] = nextElement;
+
+            if (
+              el.type === ElementType.TABLE &&
+              getElementZIndex(nextElement) !== getElementZIndex(el)
+            ) {
+              updatedTableIds.add(el.id);
+            }
             break;
           }
         }
       }
+
+      this.ensureEmbeddedElementsAboveTables(updatedTableIds);
     },
     toggleLock() {
       if (!this.isTemplateEditable) return;
@@ -2862,8 +4174,8 @@ export const useDesignerStore = defineStore("designer", {
       this.updateElement(
         element.id,
         {
-        data: currentData,
-        height: HEADER_HEIGHT + currentData.length * ROW_HEIGHT,
+          data: currentData,
+          height: HEADER_HEIGHT + currentData.length * ROW_HEIGHT,
         },
         false,
       );

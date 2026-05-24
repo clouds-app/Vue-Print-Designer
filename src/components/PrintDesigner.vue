@@ -6,12 +6,13 @@ import { useDesignerStore } from "@/stores/designer";
 import { useTemplateStore } from "@/stores/templates";
 import { useAutoSave } from "@/composables/useAutoSave";
 import { useTheme } from "@/composables/useTheme";
+import { useFloatingTooltip } from "@/composables/useFloatingTooltip";
 import debounce from "lodash/debounce";
 import { canEditEntity } from "@/utils/entityConstraints";
 import { pxToUnit, type Unit } from "@/utils/units";
 import { parseColor, toRgbaString } from "@/utils/color";
 import Header from "./layout/Header.vue";
-import Sidebar from "./layout/Sidebar.vue";
+import ElementsPanel from "./layout/ElementsPanel.vue";
 import PropertiesPanel from "./layout/PropertiesPanel.vue";
 import Canvas from "./canvas/Canvas.vue";
 import Ruler from "./layout/Ruler.vue";
@@ -25,6 +26,7 @@ import Save from "~icons/material-symbols/save";
 import SaveAs from "~icons/material-symbols/save-as";
 import Logout from "~icons/material-symbols/logout";
 import Close from "~icons/material-symbols/close";
+import Help from "~icons/material-symbols/help";
 
 const store = useDesignerStore();
 const templateStore = useTemplateStore();
@@ -57,6 +59,28 @@ provide("designer-hand-pan-active", isHandPanActive);
 const canvasWrapper = ref<HTMLElement | null>(null);
 const showSaveAsModal = ref(false);
 const brandTick = ref(0);
+const showTemplateHelpTooltip = ref(false);
+const templateHelpButtonRef = ref<HTMLElement | null>(null);
+const templateHelpTooltipRef = ref<HTMLElement | null>(null);
+const templatePanelHelp = computed(() => ({
+  title: t("template.help.title"),
+  items: [
+    t("template.help.items.manage"),
+    t("template.help.items.variables"),
+    t("template.help.items.persist"),
+  ],
+}));
+const {
+  arrowStyle: templateHelpArrowStyle,
+  placement: templateHelpPlacement,
+  toggleTooltip: toggleTemplateHelpTooltip,
+  tooltipStyle: templateHelpTooltipStyle,
+} = useFloatingTooltip(
+  showTemplateHelpTooltip,
+  templateHelpButtonRef,
+  templateHelpTooltipRef,
+  { width: 288 },
+);
 
 type FloatingPanelKey = "sidebar" | "templates" | "properties" | "minimap";
 type FloatingPanelLayerKey = FloatingPanelKey | "history";
@@ -90,7 +114,10 @@ const FLOAT_PANEL_Z_ACTIVE_OFFSET = 10;
 const loadElementsPanelVisibility = () => {
   if (typeof window === "undefined") return false;
   try {
-    return window.localStorage.getItem(ELEMENTS_PANEL_VISIBILITY_STORAGE_KEY) === "true";
+    return (
+      window.localStorage.getItem(ELEMENTS_PANEL_VISIBILITY_STORAGE_KEY) ===
+      "true"
+    );
   } catch {
     return false;
   }
@@ -119,7 +146,10 @@ type FloatingPanelBounds = {
 const panelsHostSize = ref({ width: 0, height: 0 });
 const sidebarPanelPos = ref({ x: FLOAT_PANEL_MARGIN, y: FLOAT_PANEL_MARGIN });
 const templatePanelPos = ref({ x: FLOAT_PANEL_MARGIN, y: FLOAT_PANEL_MARGIN });
-const propertiesPanelPos = ref({ x: FLOAT_PANEL_MARGIN, y: FLOAT_PANEL_MARGIN });
+const propertiesPanelPos = ref({
+  x: FLOAT_PANEL_MARGIN,
+  y: FLOAT_PANEL_MARGIN,
+});
 const sidebarPanelPreferredPos = ref({
   x: FLOAT_PANEL_MARGIN,
   y: FLOAT_PANEL_MARGIN,
@@ -220,11 +250,17 @@ const emitPanelVisibility = (eventName: string, visible: boolean) => {
 };
 
 const emitElementsPanelVisibility = () => {
-  emitPanelVisibility("designer:elements-panel-visibility", showElementsPanel.value);
+  emitPanelVisibility(
+    "designer:elements-panel-visibility",
+    showElementsPanel.value,
+  );
 };
 
 const emitTemplatePanelVisibility = () => {
-  emitPanelVisibility("designer:template-panel-visibility", showTemplatePanel.value);
+  emitPanelVisibility(
+    "designer:template-panel-visibility",
+    showTemplatePanel.value,
+  );
 };
 
 const emitPropertiesPanelVisibility = () => {
@@ -397,6 +433,7 @@ const handleCloseElementsPanelEvent = (e: Event) => {
 
 const closeTemplatePanel = () => {
   if (!showTemplatePanel.value) return;
+  showTemplateHelpTooltip.value = false;
   showTemplatePanel.value = false;
   emitTemplatePanelVisibility();
 };
@@ -424,10 +461,7 @@ const getFloatingPanelBounds = (): FloatingPanelBounds => {
   const fallbackMinX = FLOAT_PANEL_MARGIN;
   const fallbackMinY = FLOAT_PANEL_MARGIN;
   const fallbackMaxRight = Math.max(fallbackMinX, width - FLOAT_PANEL_MARGIN);
-  const fallbackMaxBottom = Math.max(
-    fallbackMinY,
-    height - FLOAT_PANEL_MARGIN,
-  );
+  const fallbackMaxBottom = Math.max(fallbackMinY, height - FLOAT_PANEL_MARGIN);
   const fallbackMaxHeight = Math.max(
     FLOAT_PANEL_MIN_HEIGHT,
     fallbackMaxBottom - fallbackMinY,
@@ -467,8 +501,7 @@ const clampPanelPos = (
   panelWidth: number,
   panelHeight: number,
 ) => {
-  const { minX, minY, maxRight, maxBottom } =
-    getFloatingPanelBounds();
+  const { minX, minY, maxRight, maxBottom } = getFloatingPanelBounds();
   const maxX = Math.max(minX, maxRight - panelWidth);
   const maxY = Math.max(minY, maxBottom - panelHeight);
 
@@ -495,11 +528,17 @@ const clampPanelHeight = (panelHeight: number, panelY: number) => {
     maxBottom - Math.max(panelY, minY),
   );
   const maxAllowedHeight = Math.min(maxHeight, localMaxHeight);
-  return Math.min(Math.max(panelHeight, FLOAT_PANEL_MIN_HEIGHT), maxAllowedHeight);
+  return Math.min(
+    Math.max(panelHeight, FLOAT_PANEL_MIN_HEIGHT),
+    maxAllowedHeight,
+  );
 };
 
 const clampPreferredPanelWidth = (panelWidth: number) => {
-  return Math.min(Math.max(panelWidth, FLOAT_PANEL_MIN_WIDTH), FLOAT_PANEL_MAX_WIDTH);
+  return Math.min(
+    Math.max(panelWidth, FLOAT_PANEL_MIN_WIDTH),
+    FLOAT_PANEL_MAX_WIDTH,
+  );
 };
 
 const clampPreferredPanelHeight = (panelHeight: number) => {
@@ -738,12 +777,7 @@ const detectPanelAnchors = (
       bounds,
       previousAnchors.x,
     ),
-    y: detectVerticalAnchor(
-      panelPos.y,
-      panelHeight,
-      bounds,
-      previousAnchors.y,
-    ),
+    y: detectVerticalAnchor(panelPos.y, panelHeight, bounds, previousAnchors.y),
   };
 };
 
@@ -891,7 +925,11 @@ const resolveMinimapPanelResizeLayout = (
   deltaX: number,
   deltaY: number,
 ): FloatingPanelLayout => {
-  return resolveMinimapPanelLayout(startPos, startWidth + deltaX, startHeight + deltaY);
+  return resolveMinimapPanelLayout(
+    startPos,
+    startWidth + deltaX,
+    startHeight + deltaY,
+  );
 };
 
 const getMinimapPanelSize = () => {
@@ -1113,7 +1151,9 @@ const minimapPreviewWidth = computed(() =>
 const minimapPreviewMaxHeight = computed(() =>
   Math.max(
     80,
-    minimapPanelHeight.value - MINIMAP_PANEL_HEADER_HEIGHT - MINIMAP_PANEL_BORDER_SIZE,
+    minimapPanelHeight.value -
+      MINIMAP_PANEL_HEADER_HEIGHT -
+      MINIMAP_PANEL_BORDER_SIZE,
   ),
 );
 
@@ -1151,7 +1191,9 @@ const getPanelZIndex = (panel: FloatingPanelKey) => {
   return panelBaseZIndex;
 };
 
-const historyPanelBaseZIndex = computed(() => getPanelLayerBaseZIndex("history"));
+const historyPanelBaseZIndex = computed(() =>
+  getPanelLayerBaseZIndex("history"),
+);
 
 const handleBringPanelToFrontEvent = (e: Event) => {
   if (!isEventForCurrentDesigner(e)) return;
@@ -1326,17 +1368,17 @@ const handlePanelDragMove = (e: MouseEvent) => {
       ? sidebarPanelWidth.value
       : draggingPanel === "templates"
         ? templatePanelWidth.value
-      : draggingPanel === "properties"
-        ? propertiesPanelWidth.value
-        : getMinimapPanelSize().width;
+        : draggingPanel === "properties"
+          ? propertiesPanelWidth.value
+          : getMinimapPanelSize().width;
   const panelHeight =
     draggingPanel === "sidebar"
       ? sidebarPanelHeight.value
       : draggingPanel === "templates"
         ? templatePanelHeight.value
-      : draggingPanel === "properties"
-        ? propertiesPanelHeight.value
-        : getMinimapPanelSize().height;
+        : draggingPanel === "properties"
+          ? propertiesPanelHeight.value
+          : getMinimapPanelSize().height;
   const nextPos = clampPanelPos(
     dragStartPanelPos.x + deltaX,
     dragStartPanelPos.y + deltaY,
@@ -1528,25 +1570,25 @@ const startPanelResize = (panel: FloatingPanelKey, e: MouseEvent) => {
       ? sidebarPanelWidth.value
       : panel === "templates"
         ? templatePanelWidth.value
-      : panel === "properties"
-        ? propertiesPanelWidth.value
-        : minimapPanelWidth.value;
+        : panel === "properties"
+          ? propertiesPanelWidth.value
+          : minimapPanelWidth.value;
   resizeStartHeight =
     panel === "sidebar"
       ? sidebarPanelHeight.value
       : panel === "templates"
         ? templatePanelHeight.value
-      : panel === "properties"
-        ? propertiesPanelHeight.value
-        : minimapPanelHeight.value;
+        : panel === "properties"
+          ? propertiesPanelHeight.value
+          : minimapPanelHeight.value;
   resizeStartPanelPos =
     panel === "sidebar"
       ? { ...sidebarPanelPos.value }
       : panel === "templates"
         ? { ...templatePanelPos.value }
-      : panel === "properties"
-        ? { ...propertiesPanelPos.value }
-        : { ...minimapPanelPos.value };
+        : panel === "properties"
+          ? { ...propertiesPanelPos.value }
+          : { ...minimapPanelPos.value };
   resizeStartPanelAnchors =
     panel === "minimap"
       ? { x: "free", y: "free" }
@@ -1568,17 +1610,23 @@ const startPanelDrag = (panel: FloatingPanelKey, e: MouseEvent) => {
       ? { ...sidebarPanelPos.value }
       : panel === "templates"
         ? { ...templatePanelPos.value }
-      : panel === "properties"
-        ? { ...propertiesPanelPos.value }
-        : { ...minimapPanelPos.value };
+        : panel === "properties"
+          ? { ...propertiesPanelPos.value }
+          : { ...minimapPanelPos.value };
 
   window.addEventListener("mousemove", handlePanelDragMove);
   window.addEventListener("mouseup", stopPanelDrag);
 };
 
-const handleFloatingPanelMouseDown = (panel: FloatingPanelKey, e: MouseEvent) => {
+const handleFloatingPanelMouseDown = (
+  panel: FloatingPanelKey,
+  e: MouseEvent,
+) => {
   const target = e.target as HTMLElement | null;
-  if (target?.closest(".panel-close-btn")) {
+  if (
+    target?.closest(".panel-close-btn") ||
+    target?.closest(".panel-help-btn")
+  ) {
     return;
   }
   if (!target?.closest('[data-floating-panel-drag-handle="true"]')) {
@@ -1685,6 +1733,9 @@ onMounted(() => {
   window.addEventListener("resize", handleLayoutResize);
   window.addEventListener("keydown", handleCtrlKey);
   window.addEventListener("keydown", handleCustomEditShortcuts);
+  window.addEventListener("keydown", handleGuideDeleteShortcut, {
+    capture: true,
+  });
   window.addEventListener("keyup", handleCtrlKey);
   window.addEventListener("blur", handleBlur);
   window.addEventListener("brand-theme-updated", handleBrandThemeUpdated);
@@ -1754,6 +1805,17 @@ onMounted(() => {
       () => store.footerHeight,
       () => store.showHeaderLine,
       () => store.showFooterLine,
+      () => store.enableHeaderFooterLineRendering,
+      () => store.headerLineStyle,
+      () => store.footerLineStyle,
+      () => store.headerLineColor,
+      () => store.footerLineColor,
+      () => store.headerLineWidth,
+      () => store.footerLineWidth,
+      () => store.headerLineSpanMode,
+      () => store.footerLineSpanMode,
+      () => store.headerLineSpan,
+      () => store.footerLineSpan,
       () => store.canvasBackground,
       () => store.pageSpacingX,
       () => store.pageSpacingY,
@@ -1791,7 +1853,7 @@ const debouncedAutoSave = debounce(async () => {
 const handleSaveCustomEdit = () => {
   const ok = store.commitCustomElementEdit();
   if (!ok) {
-    toast.error(t("sidebar.editSaveFailed"));
+    toast.error(t("elementsPanel.editSaveFailed"));
     return;
   }
   store.cancelCustomElementEdit();
@@ -1802,14 +1864,14 @@ const handleSaveCustomEditAs = (name: string) => {
   if (!trimmed) return;
   const ok = store.saveCustomElementEditAs(trimmed);
   if (!ok) {
-    toast.error(t("sidebar.editSaveFailed"));
+    toast.error(t("elementsPanel.editSaveFailed"));
     return;
   }
   store.cancelCustomElementEdit();
 };
 
 const handleExitCustomEdit = async () => {
-  if (!(await uiConfirm.show(t("sidebar.confirmExitEdit")))) {
+  if (!(await uiConfirm.show(t("elementsPanel.confirmExitEdit")))) {
     return;
   }
   store.cancelCustomElementEdit();
@@ -1855,6 +1917,18 @@ const handleCustomEditShortcuts = (e: KeyboardEvent) => {
     e.stopPropagation();
     handleExitCustomEdit();
   }
+};
+
+const handleGuideDeleteShortcut = (e: KeyboardEvent) => {
+  if (store.disableGlobalShortcuts) return;
+  if (!store.selectedGuideId) return;
+  if (isTypingTarget(e.target)) return;
+  if (e.key !== "Delete" && e.key !== "Del") return;
+
+  e.preventDefault();
+  e.stopPropagation();
+  store.removeGuide(store.selectedGuideId);
+  store.setHighlightedGuide(null);
 };
 
 const scrollX = ref(0);
@@ -1951,7 +2025,10 @@ const minimapHandPanEdgeY = computed(() =>
   getHandPanEdgeSpace(viewportHeight.value),
 );
 const minimapScrollWidth = computed(() =>
-  Math.max(viewportWidth.value, scrollWidth.value - minimapHandPanEdgeX.value * 2),
+  Math.max(
+    viewportWidth.value,
+    scrollWidth.value - minimapHandPanEdgeX.value * 2,
+  ),
 );
 const minimapScrollHeight = computed(() =>
   Math.max(
@@ -1961,11 +2038,17 @@ const minimapScrollHeight = computed(() =>
 );
 const minimapScrollX = computed(() => {
   const maxLeft = Math.max(0, minimapScrollWidth.value - viewportWidth.value);
-  return Math.max(0, Math.min(maxLeft, scrollX.value - minimapHandPanEdgeX.value));
+  return Math.max(
+    0,
+    Math.min(maxLeft, scrollX.value - minimapHandPanEdgeX.value),
+  );
 });
 const minimapScrollY = computed(() => {
   const maxTop = Math.max(0, minimapScrollHeight.value - viewportHeight.value);
-  return Math.max(0, Math.min(maxTop, scrollY.value - minimapHandPanEdgeY.value));
+  return Math.max(
+    0,
+    Math.min(maxTop, scrollY.value - minimapHandPanEdgeY.value),
+  );
 });
 const minimapContentOffsetX = computed(() => {
   if (!isHandPanActive.value) return contentOffsetX.value;
@@ -2056,6 +2139,9 @@ onUnmounted(() => {
   window.removeEventListener("mouseup", handleGuideMouseUp);
   window.removeEventListener("keydown", handleCtrlKey);
   window.removeEventListener("keydown", handleCustomEditShortcuts);
+  window.removeEventListener("keydown", handleGuideDeleteShortcut, {
+    capture: true,
+  });
   window.removeEventListener("keyup", handleCtrlKey);
   window.removeEventListener("blur", handleBlur);
   window.removeEventListener("brand-theme-updated", handleBrandThemeUpdated);
@@ -2103,6 +2189,8 @@ const handleGuideDragStart = (
   type: "horizontal" | "vertical",
   id: string | null = null,
 ) => {
+  e.preventDefault();
+  scrollContainer.value?.focus();
   isDraggingGuide.value = true;
   draggingGuideId.value = id;
   draggingGuideType.value = type;
@@ -2116,17 +2204,20 @@ const handleGuideDragStart = (
 const updateGuidePosFromEvent = (e: MouseEvent) => {
   if (!scrollContainer.value) return;
 
-  const rect = scrollContainer.value.getBoundingClientRect();
+  const viewportRect = projectionViewportRef.value
+    ? projectionViewportRef.value.getBoundingClientRect()
+    : scrollContainer.value.getBoundingClientRect();
   const zoom = store.zoom;
 
   if (draggingGuideType.value === "horizontal") {
-    // Relative to scrollContainer top
-    const visualY = e.clientY - rect.top + scrollContainer.value.scrollTop;
-    draggingGuidePos.value = (visualY - contentOffsetY.value) / zoom;
+    // Keep drag math in the same coordinate space used by projection rendering.
+    const viewportY = e.clientY - viewportRect.top;
+    draggingGuidePos.value =
+      (viewportY - projectionViewportOffsetY.value) / zoom;
   } else {
-    // Relative to scrollContainer left
-    const visualX = e.clientX - rect.left + scrollContainer.value.scrollLeft;
-    draggingGuidePos.value = (visualX - contentOffsetX.value) / zoom;
+    const viewportX = e.clientX - viewportRect.left;
+    draggingGuidePos.value =
+      (viewportX - projectionViewportOffsetX.value) / zoom;
   }
 };
 
@@ -2369,7 +2460,7 @@ const rulerRanges = computed(() => {
         >
           <div class="text-sm font-medium">
             {{
-              t("sidebar.editingElement", {
+              t("elementsPanel.editingElement", {
                 name: editingCustomElement?.name || "",
               })
             }}
@@ -2380,21 +2471,21 @@ const rulerRanges = computed(() => {
               class="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 inline-flex items-center gap-1.5"
             >
               <Save class="w-4 h-4" />
-              {{ t("sidebar.saveEdit") }}
+              {{ t("elementsPanel.saveEdit") }}
             </button>
             <button
               @click="showSaveAsModal = true"
               class="px-3 py-1.5 text-xs font-medium bg-blue-200 text-blue-900 rounded hover:bg-blue-300 dark:bg-blue-700 dark:hover:bg-blue-600 dark:text-white inline-flex items-center gap-1.5"
             >
               <SaveAs class="w-4 h-4" />
-              {{ t("sidebar.saveAs") }}
+              {{ t("elementsPanel.saveAs") }}
             </button>
             <button
               @click="handleExitCustomEdit"
               class="px-3 py-1.5 text-xs font-medium bg-slate-200 text-slate-900 rounded hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100 inline-flex items-center gap-1.5"
             >
               <Logout class="w-4 h-4" />
-              {{ t("sidebar.exitEdit") }}
+              {{ t("elementsPanel.exitEdit") }}
             </button>
           </div>
         </div>
@@ -2443,7 +2534,10 @@ const rulerRanges = computed(() => {
             </div>
 
             <!-- Canvas Area -->
-            <div ref="projectionViewportRef" class="flex-1 relative overflow-hidden">
+            <div
+              ref="projectionViewportRef"
+              class="flex-1 relative overflow-hidden"
+            >
               <div
                 ref="scrollContainer"
                 tabindex="-1"
@@ -2478,7 +2572,9 @@ const rulerRanges = computed(() => {
               </div>
 
               <!-- Guides Overlay (Viewport Layer) -->
-              <div class="absolute inset-0 pointer-events-none z-30 overflow-hidden">
+              <div
+                class="absolute inset-0 pointer-events-none z-30 overflow-hidden"
+              >
                 <!-- Existing Guides -->
                 <template v-for="guide in store.guides" :key="guide.id">
                   <div
@@ -2574,7 +2670,10 @@ const rulerRanges = computed(() => {
                 </div>
 
                 <!-- Edge Highlight -->
-                <div v-if="store.highlightedEdge" class="absolute inset-0 pointer-events-none">
+                <div
+                  v-if="store.highlightedEdge"
+                  class="absolute inset-0 pointer-events-none"
+                >
                   <div
                     v-if="store.highlightedEdge === 'top'"
                     class="absolute left-0 right-0 border-t theme-border"
@@ -2604,11 +2703,15 @@ const rulerRanges = computed(() => {
 
               <!-- Dragging Distance Guides (Viewport Layer) -->
               <template v-if="dragProjection">
-                <div class="absolute inset-0 pointer-events-none z-30 overflow-hidden">
+                <div
+                  class="absolute inset-0 pointer-events-none z-30 overflow-hidden"
+                >
                   <!-- Top Line -->
                   <div
                     class="absolute left-0 right-0 border-t border-blue-500 border-dashed"
-                    :style="getProjectionHorizontalLineStyle(dragProjection.minY)"
+                    :style="
+                      getProjectionHorizontalLineStyle(dragProjection.minY)
+                    "
                   >
                     <div
                       class="absolute -top-6 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded shadow-sm"
@@ -2621,7 +2724,9 @@ const rulerRanges = computed(() => {
                   <!-- Bottom Line -->
                   <div
                     class="absolute left-0 right-0 border-t border-dashed theme-border"
-                    :style="getProjectionHorizontalLineStyle(dragProjection.maxY)"
+                    :style="
+                      getProjectionHorizontalLineStyle(dragProjection.maxY)
+                    "
                   >
                     <div
                       class="absolute -top-6 theme-bg text-white text-xs px-1.5 py-0.5 rounded shadow-sm"
@@ -2686,7 +2791,9 @@ const rulerRanges = computed(() => {
               class="flex shrink-0 items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 cursor-move select-none"
               data-floating-panel-drag-handle="true"
             >
-              <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200 m-0">
+              <h3
+                class="text-sm font-semibold text-gray-700 dark:text-gray-200 m-0"
+              >
                 {{ t("editor.showMinimap") }}
               </h3>
               <button
@@ -2769,7 +2876,7 @@ const rulerRanges = computed(() => {
           class="relative h-full w-full pointer-events-auto rounded-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
           @mousedown="(e) => handleFloatingPanelMouseDown('sidebar', e)"
         >
-          <Sidebar />
+          <ElementsPanel />
         </div>
         <button
           type="button"
@@ -2816,26 +2923,90 @@ const rulerRanges = computed(() => {
           @mousedown="(e) => handleFloatingPanelMouseDown('templates', e)"
         >
           <div
-            class="p-4 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
+            class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
             data-floating-panel-drag-handle="true"
           >
-            <div class="flex items-start justify-between gap-2">
-              <div>
-                <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  {{ t("editor.templates") }}
-                </h2>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {{ t("template.select") }}
-                </p>
-              </div>
+            <div class="min-w-0">
+              <h2
+                class="text-sm font-semibold text-gray-900 dark:text-gray-100"
+              >
+                {{ t("editor.templates") }}
+              </h2>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {{ t("template.select") }}
+              </p>
+            </div>
+            <div class="absolute right-0 top-0 z-50 flex items-center gap-0">
               <button
-                class="panel-close-btn p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-500 dark:text-gray-400"
-                @click="closeTemplatePanel"
+                ref="templateHelpButtonRef"
+                type="button"
+                :class="[
+                  'panel-help-btn h-8 w-8 inline-flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200',
+                  showTemplateHelpTooltip
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
+                    : '',
+                ]"
+                :aria-label="t('template.help.title')"
+                :aria-pressed="showTemplateHelpTooltip"
+                @mousedown.stop.prevent="toggleTemplateHelpTooltip"
+              >
+                <Help class="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                class="panel-close-btn h-8 w-8 inline-flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200"
+                @mousedown.stop
+                @click.stop="closeTemplatePanel"
               >
                 <Close class="w-4 h-4" />
               </button>
             </div>
           </div>
+          <Teleport :to="modalContainer || 'body'">
+            <div
+              v-if="showTemplateHelpTooltip"
+              ref="templateHelpTooltipRef"
+              role="tooltip"
+              class="pointer-events-auto select-text rounded border border-gray-200 bg-white text-left shadow-xl dark:border-gray-700 dark:bg-gray-900"
+              :style="templateHelpTooltipStyle"
+              @click.stop
+            >
+              <div
+                v-if="templateHelpPlacement === 'bottom'"
+                class="absolute -top-1.5 h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+                :style="templateHelpArrowStyle"
+              ></div>
+              <div
+                v-else
+                class="absolute -bottom-1.5 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+                :style="templateHelpArrowStyle"
+              ></div>
+              <div
+                class="overflow-y-auto p-3"
+                :style="{ maxHeight: templateHelpTooltipStyle.maxHeight }"
+              >
+                <div class="flex items-start gap-2">
+                  <Help
+                    class="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300"
+                  />
+                  <div class="min-w-0">
+                    <h3
+                      class="text-sm font-semibold text-gray-900 dark:text-gray-100"
+                    >
+                      {{ templatePanelHelp.title }}
+                    </h3>
+                    <ul
+                      class="mt-2 list-disc space-y-1 pl-4 text-xs leading-5 text-gray-600 dark:text-gray-300"
+                    >
+                      <li v-for="item in templatePanelHelp.items" :key="item">
+                        {{ item }}
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Teleport>
           <div class="min-h-0 flex-1">
             <TemplateListPanel />
           </div>
@@ -2877,8 +3048,12 @@ const rulerRanges = computed(() => {
       <div
         v-show="showPropertiesPanel"
         data-floating-panel-surface="true"
+        data-floating-panel-key="properties"
         class="absolute pointer-events-none"
-        :style="[propertiesPanelStyle, { zIndex: getPanelZIndex('properties') }]"
+        :style="[
+          propertiesPanelStyle,
+          { zIndex: getPanelZIndex('properties') },
+        ]"
       >
         <div
           class="relative h-full w-full pointer-events-auto rounded-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
@@ -2924,8 +3099,8 @@ const rulerRanges = computed(() => {
     <InputModal
       :show="showSaveAsModal"
       :initial-value="saveAsInitialName"
-      :title="t('sidebar.saveAsCustomElement')"
-      :placeholder="t('sidebar.enterNamePlaceholder')"
+      :title="t('elementsPanel.saveAsCustomElement')"
+      :placeholder="t('elementsPanel.enterNamePlaceholder')"
       @close="showSaveAsModal = false"
       @save="handleSaveCustomEditAs"
     />

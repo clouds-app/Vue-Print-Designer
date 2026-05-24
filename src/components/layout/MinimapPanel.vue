@@ -68,7 +68,9 @@ const height = computed(() => {
 
 const previewScale = computed(() => props.zoom * ratio.value);
 
-const contentHeight = computed(() => Math.max(height.value, previewMaxHeight.value));
+const contentHeight = computed(() =>
+  Math.max(height.value, previewMaxHeight.value),
+);
 
 const viewportRect = computed(() => {
   const scaledWidth = props.scrollWidth * ratio.value;
@@ -233,16 +235,16 @@ const getGlobalElements = () => {
     return { minY, maxY };
   };
   return firstPage.elements.filter((el: any) => {
-    if (el.type === ElementType.TABLE) return false;
     const bounds = getRotatedBounds(el);
-    const isRepeatPerPage = el.repeatPerPage === true;
+    const isRepeatPerPage =
+      el.type !== ElementType.TABLE && el.repeatPerPage === true;
     const marginTop = props.pageSpacingY || 0;
     const marginBottom = props.pageSpacingY || 0;
     const headerBoundary = props.headerHeight + marginTop;
-    const footerBoundary = props.pageHeight - (props.footerHeight + marginBottom);
+    const footerBoundary =
+      props.pageHeight - (props.footerHeight + marginBottom);
     const isHeader = props.showHeaderLine && bounds.maxY <= headerBoundary;
-    const isFooter =
-      props.showFooterLine && bounds.minY >= footerBoundary;
+    const isFooter = props.showFooterLine && bounds.minY >= footerBoundary;
     return isRepeatPerPage || isHeader || isFooter;
   });
 };
@@ -584,10 +586,16 @@ const handleMouseDown = (e: MouseEvent) => {
 
     if (autoScrollDirection !== 0) {
       const prev = container.scrollTop;
-      const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+      const maxScroll = Math.max(
+        0,
+        container.scrollHeight - container.clientHeight,
+      );
       container.scrollTop = Math.max(
         0,
-        Math.min(maxScroll, prev + autoScrollDirection * DRAG_EDGE_AUTO_SCROLL_SPEED),
+        Math.min(
+          maxScroll,
+          prev + autoScrollDirection * DRAG_EDGE_AUTO_SCROLL_SPEED,
+        ),
       );
 
       if (container.scrollTop !== prev) {

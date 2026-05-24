@@ -1,12 +1,5 @@
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onMounted,
-  onUnmounted,
-  ref,
-  watch,
-} from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDesignerStore } from "@/stores/designer";
 import Type from "~icons/material-symbols/text-fields";
@@ -35,7 +28,9 @@ const elementsContentRef = ref<HTMLElement | null>(null);
 const isElementsOverflowing = ref(false);
 const canScrollElementsLeft = ref(false);
 const canScrollElementsRight = ref(false);
-const viewportWidth = ref(typeof window === "undefined" ? 1920 : window.innerWidth);
+const viewportWidth = ref(
+  typeof window === "undefined" ? 1920 : window.innerWidth,
+);
 const SMALL_SCREEN_BREAKPOINT = 1360;
 let elementsResizeObserver: ResizeObserver | null = null;
 
@@ -47,29 +42,37 @@ type HeaderElementItem = {
 
 const standardGroups: HeaderElementItem[][] = [
   [
-    { type: ElementType.TEXT, label: "sidebar.text", icon: Type },
-    { type: ElementType.IMAGE, label: "sidebar.image", icon: Image },
+    { type: ElementType.TEXT, label: "elementsPanel.text", icon: Type },
+    { type: ElementType.IMAGE, label: "elementsPanel.image", icon: Image },
     {
       type: ElementType.PAGE_NUMBER,
-      label: "sidebar.pagination",
+      label: "elementsPanel.pagination",
       icon: Numbers,
     },
   ],
   [
-    { type: ElementType.TABLE, label: "sidebar.table", icon: Table },
-    { type: ElementType.BARCODE, label: "sidebar.barcode", icon: Barcode },
-    { type: ElementType.QRCODE, label: "sidebar.qrcode", icon: QrCode },
+    { type: ElementType.TABLE, label: "elementsPanel.table", icon: Table },
+    {
+      type: ElementType.BARCODE,
+      label: "elementsPanel.barcode",
+      icon: Barcode,
+    },
+    { type: ElementType.QRCODE, label: "elementsPanel.qrcode", icon: QrCode },
   ],
   [
-    { type: ElementType.LINE, label: "sidebar.line", icon: HorizontalRule },
+    {
+      type: ElementType.LINE,
+      label: "elementsPanel.line",
+      icon: HorizontalRule,
+    },
     {
       type: ElementType.RECT,
-      label: "sidebar.rect",
+      label: "elementsPanel.rect",
       icon: CheckBoxOutlineBlank,
     },
     {
       type: ElementType.CIRCLE,
-      label: "sidebar.circle",
+      label: "elementsPanel.circle",
       icon: RadioButtonUnchecked,
     },
   ],
@@ -77,7 +80,7 @@ const standardGroups: HeaderElementItem[][] = [
 
 const isCustomList = computed(() => activeList.value === "custom");
 const nextListLabel = computed(() =>
-  isCustomList.value ? t("sidebar.standard") : t("sidebar.custom"),
+  isCustomList.value ? t("elementsPanel.standard") : t("elementsPanel.custom"),
 );
 
 const toggleList = () => {
@@ -155,7 +158,10 @@ const updateElementsScrollState = () => {
     return;
   }
 
-  const maxScrollLeft = Math.max(container.scrollWidth - container.clientWidth, 0);
+  const maxScrollLeft = Math.max(
+    container.scrollWidth - container.clientWidth,
+    0,
+  );
   isElementsOverflowing.value = maxScrollLeft > 4;
   canScrollElementsLeft.value = container.scrollLeft > 2;
   canScrollElementsRight.value = container.scrollLeft < maxScrollLeft - 2;
@@ -284,7 +290,10 @@ onUnmounted(() => {
                 @dragstart="(e) => handleDragStart(e, item.type)"
               >
                 <component :is="item.icon" class="w-4 h-4" />
-                <span class="w-full px-0.5 text-center text-[10px] leading-3 truncate">{{ t(item.label) }}</span>
+                <span
+                  class="w-full px-0.5 text-center text-[10px] leading-3 truncate"
+                  >{{ t(item.label) }}</span
+                >
               </div>
             </template>
           </div>
@@ -293,7 +302,7 @@ onUnmounted(() => {
             v-else-if="customElements.length === 0"
             class="text-xs text-gray-500 px-1"
           >
-            {{ t("sidebar.noCustomElements") }}
+            {{ t("elementsPanel.noCustomElements") }}
           </div>
 
           <div
@@ -301,10 +310,7 @@ onUnmounted(() => {
             v-else
             class="flex w-max min-w-max items-center gap-1.5 pr-1"
           >
-            <template
-              v-for="(item, index) in customElements"
-              :key="item.id"
-            >
+            <template v-for="(item, index) in customElements" :key="item.id">
               <div
                 v-if="shouldShowCustomTypeDivider(index)"
                 class="h-8 w-px bg-gray-300 shrink-0"
@@ -315,8 +321,14 @@ onUnmounted(() => {
                 :title="item.name"
                 @dragstart="(e) => handleDragStartCustom(e, item)"
               >
-                <component :is="getCustomIcon(item.element.type)" class="w-4 h-4" />
-                <span class="w-full px-0.5 text-center text-[10px] leading-3 truncate">{{ item.name }}</span>
+                <component
+                  :is="getCustomIcon(item.element.type)"
+                  class="w-4 h-4"
+                />
+                <span
+                  class="w-full px-0.5 text-center text-[10px] leading-3 truncate"
+                  >{{ item.name }}</span
+                >
               </div>
             </template>
           </div>

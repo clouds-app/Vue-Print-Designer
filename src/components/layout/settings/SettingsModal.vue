@@ -53,7 +53,54 @@ const {
 } = usePrintSettings();
 
 const activeTab = ref<"basic" | "language" | "local" | "remote">("basic");
-const selectedLang = ref<string>(locale.value as string);
+type LanguageCode = "zh" | "zh-Hant" | "en" | "ja" | "ko" | "de";
+
+const supportedLanguages: LanguageCode[] = [
+  "zh",
+  "zh-Hant",
+  "en",
+  "ja",
+  "ko",
+  "de",
+];
+
+const normalizeLanguage = (lang: string): LanguageCode => {
+  if (supportedLanguages.includes(lang as LanguageCode)) {
+    return lang as LanguageCode;
+  }
+  return "en";
+};
+
+const languageOptions = computed<{ value: LanguageCode; label: string }[]>(
+  () => [
+    {
+      value: "zh",
+      label: t("settings.zhLabel"),
+    },
+    {
+      value: "zh-Hant",
+      label: t("settings.zhHantLabel"),
+    },
+    {
+      value: "en",
+      label: t("settings.enLabel"),
+    },
+    {
+      value: "ja",
+      label: t("settings.jaLabel"),
+    },
+    {
+      value: "ko",
+      label: t("settings.koLabel"),
+    },
+    {
+      value: "de",
+      label: t("settings.deLabel"),
+    },
+  ],
+);
+
+const selectedLang = ref<LanguageCode>(normalizeLanguage(locale.value as string));
 const selectedBrandKey = ref<string>(
   localStorage.getItem("print-designer-brand-key") || "default",
 );
@@ -307,8 +354,9 @@ watch(selectedLang, (val) => {
 });
 
 watch(locale, (val) => {
-  if (selectedLang.value !== val) {
-    selectedLang.value = val as string;
+  const normalized = normalizeLanguage(val as string);
+  if (selectedLang.value !== normalized) {
+    selectedLang.value = normalized;
   }
 });
 
@@ -648,7 +696,11 @@ onUnmounted(() => {
                       {{ t("settings.developerMode") }}
                     </div>
                     <button
-                      @click="designerStore.setShowDeveloperMode(!designerStore.showDeveloperMode)"
+                      @click="
+                        designerStore.setShowDeveloperMode(
+                          !designerStore.showDeveloperMode,
+                        )
+                      "
                       class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
                       :class="
                         designerStore.showDeveloperMode
@@ -656,7 +708,9 @@ onUnmounted(() => {
                           : 'bg-gray-200'
                       "
                     >
-                      <span class="sr-only">{{ t("settings.developerMode") }}</span>
+                      <span class="sr-only">{{
+                        t("settings.developerMode")
+                      }}</span>
                       <span
                         aria-hidden="true"
                         class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
@@ -842,28 +896,19 @@ onUnmounted(() => {
               <div class="mb-2 font-medium text-gray-900">
                 {{ t("settings.selectLanguage") }}
               </div>
-              <div class="flex items-center gap-3">
+              <div class="flex flex-wrap items-center gap-3">
                 <label
+                  v-for="option in languageOptions"
+                  :key="option.value"
                   class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
                   :class="
-                    selectedLang === 'zh'
+                    selectedLang === option.value
                       ? 'border-blue-600 text-blue-700'
                       : 'border-gray-300'
                   "
                 >
-                  <input type="radio" value="zh" v-model="selectedLang" />
-                  <span>{{ t("settings.zhLabel") }}</span>
-                </label>
-                <label
-                  class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
-                  :class="
-                    selectedLang === 'en'
-                      ? 'border-blue-600 text-blue-700'
-                      : 'border-gray-300'
-                  "
-                >
-                  <input type="radio" value="en" v-model="selectedLang" />
-                  <span>{{ t("settings.enLabel") }}</span>
+                  <input type="radio" :value="option.value" v-model="selectedLang" />
+                  <span>{{ option.label }}</span>
                 </label>
               </div>
               <p class="text-xs text-gray-500 mt-2">

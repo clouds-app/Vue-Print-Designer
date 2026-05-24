@@ -106,6 +106,40 @@ const withExtAvailableVariables = (
   });
 };
 
+const normalizeHeaderFooterLineStyle = (value: unknown) => {
+  return value === "solid" || value === "dotted" ? value : "dashed";
+};
+
+const normalizeHeaderFooterLineColor = (value: unknown) => {
+  if (typeof value !== "string") return "#f87171";
+  const color = value.trim();
+  return color ? color : "#f87171";
+};
+
+const normalizeHeaderFooterLineWidth = (value: unknown) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(1, Math.round(numeric));
+};
+
+const normalizeHeaderFooterLineSpanMode = (value: unknown) => {
+  return value === "percent" ? "percent" : "value";
+};
+
+const normalizeHeaderFooterLineSpan = (value: unknown, mode: unknown) => {
+  const nextMode = normalizeHeaderFooterLineSpanMode(mode);
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return nextMode === "percent" ? 100 : 100;
+  if (nextMode === "percent") {
+    return Math.min(100, Math.max(1, Number(numeric.toFixed(2))));
+  }
+  return Math.max(1, Math.round(numeric));
+};
+
+const normalizeHeaderFooterLineRenderingEnabled = (value: unknown) => {
+  return Boolean(value);
+};
+
 export const useTemplateStore = defineStore("templates", {
   state: () => ({
     crudScopeId: "__global__",
@@ -326,6 +360,18 @@ export const useTemplateStore = defineStore("templates", {
         footerHeight: designerStore.footerHeight,
         showHeaderLine: designerStore.showHeaderLine,
         showFooterLine: designerStore.showFooterLine,
+        enableHeaderFooterLineRendering:
+          designerStore.enableHeaderFooterLineRendering,
+        headerLineStyle: designerStore.headerLineStyle,
+        footerLineStyle: designerStore.footerLineStyle,
+        headerLineColor: designerStore.headerLineColor,
+        footerLineColor: designerStore.footerLineColor,
+        headerLineWidth: designerStore.headerLineWidth,
+        footerLineWidth: designerStore.footerLineWidth,
+        headerLineSpanMode: designerStore.headerLineSpanMode,
+        footerLineSpanMode: designerStore.footerLineSpanMode,
+        headerLineSpan: designerStore.headerLineSpan,
+        footerLineSpan: designerStore.footerLineSpan,
         showMinimap: designerStore.showMinimap,
         showHistoryPanel: designerStore.showHistoryPanel,
         canvasBackground: designerStore.canvasBackground,
@@ -544,6 +590,18 @@ export const useTemplateStore = defineStore("templates", {
         footerHeight: designerStore.footerHeight,
         showHeaderLine: designerStore.showHeaderLine,
         showFooterLine: designerStore.showFooterLine,
+        enableHeaderFooterLineRendering:
+          designerStore.enableHeaderFooterLineRendering,
+        headerLineStyle: designerStore.headerLineStyle,
+        footerLineStyle: designerStore.footerLineStyle,
+        headerLineColor: designerStore.headerLineColor,
+        footerLineColor: designerStore.footerLineColor,
+        headerLineWidth: designerStore.headerLineWidth,
+        footerLineWidth: designerStore.footerLineWidth,
+        headerLineSpanMode: designerStore.headerLineSpanMode,
+        footerLineSpanMode: designerStore.footerLineSpanMode,
+        headerLineSpan: designerStore.headerLineSpan,
+        footerLineSpan: designerStore.footerLineSpan,
         showMinimap: designerStore.showMinimap,
         showHistoryPanel: designerStore.showHistoryPanel,
         canvasBackground: designerStore.canvasBackground,
@@ -889,6 +947,51 @@ export const useTemplateStore = defineStore("templates", {
               designerStore.showHeaderLine = data.showHeaderLine;
             if (data.showFooterLine !== undefined)
               designerStore.showFooterLine = data.showFooterLine;
+            if (data.enableHeaderFooterLineRendering !== undefined)
+              designerStore.enableHeaderFooterLineRendering =
+                normalizeHeaderFooterLineRenderingEnabled(
+                  data.enableHeaderFooterLineRendering,
+                );
+            if (data.headerLineStyle !== undefined)
+              designerStore.headerLineStyle = normalizeHeaderFooterLineStyle(
+                data.headerLineStyle,
+              );
+            if (data.footerLineStyle !== undefined)
+              designerStore.footerLineStyle = normalizeHeaderFooterLineStyle(
+                data.footerLineStyle,
+              );
+            if (data.headerLineColor !== undefined)
+              designerStore.headerLineColor = normalizeHeaderFooterLineColor(
+                data.headerLineColor,
+              );
+            if (data.footerLineColor !== undefined)
+              designerStore.footerLineColor = normalizeHeaderFooterLineColor(
+                data.footerLineColor,
+              );
+            if (data.headerLineWidth !== undefined)
+              designerStore.headerLineWidth = normalizeHeaderFooterLineWidth(
+                data.headerLineWidth,
+              );
+            if (data.footerLineWidth !== undefined)
+              designerStore.footerLineWidth = normalizeHeaderFooterLineWidth(
+                data.footerLineWidth,
+              );
+            if (data.headerLineSpanMode !== undefined)
+              designerStore.headerLineSpanMode =
+                normalizeHeaderFooterLineSpanMode(data.headerLineSpanMode);
+            if (data.footerLineSpanMode !== undefined)
+              designerStore.footerLineSpanMode =
+                normalizeHeaderFooterLineSpanMode(data.footerLineSpanMode);
+            if (data.headerLineSpan !== undefined)
+              designerStore.headerLineSpan = normalizeHeaderFooterLineSpan(
+                data.headerLineSpan,
+                designerStore.headerLineSpanMode,
+              );
+            if (data.footerLineSpan !== undefined)
+              designerStore.footerLineSpan = normalizeHeaderFooterLineSpan(
+                data.footerLineSpan,
+                designerStore.footerLineSpanMode,
+              );
             if (data.showMinimap !== undefined)
               designerStore.showMinimap = data.showMinimap;
             if (data.showHistoryPanel !== undefined)
@@ -979,6 +1082,51 @@ export const useTemplateStore = defineStore("templates", {
             designerStore.showHeaderLine = data.showHeaderLine;
           if (data.showFooterLine !== undefined)
             designerStore.showFooterLine = data.showFooterLine;
+          if (data.enableHeaderFooterLineRendering !== undefined)
+            designerStore.enableHeaderFooterLineRendering =
+              normalizeHeaderFooterLineRenderingEnabled(
+                data.enableHeaderFooterLineRendering,
+              );
+          if (data.headerLineStyle !== undefined)
+            designerStore.headerLineStyle = normalizeHeaderFooterLineStyle(
+              data.headerLineStyle,
+            );
+          if (data.footerLineStyle !== undefined)
+            designerStore.footerLineStyle = normalizeHeaderFooterLineStyle(
+              data.footerLineStyle,
+            );
+          if (data.headerLineColor !== undefined)
+            designerStore.headerLineColor = normalizeHeaderFooterLineColor(
+              data.headerLineColor,
+            );
+          if (data.footerLineColor !== undefined)
+            designerStore.footerLineColor = normalizeHeaderFooterLineColor(
+              data.footerLineColor,
+            );
+          if (data.headerLineWidth !== undefined)
+            designerStore.headerLineWidth = normalizeHeaderFooterLineWidth(
+              data.headerLineWidth,
+            );
+          if (data.footerLineWidth !== undefined)
+            designerStore.footerLineWidth = normalizeHeaderFooterLineWidth(
+              data.footerLineWidth,
+            );
+          if (data.headerLineSpanMode !== undefined)
+            designerStore.headerLineSpanMode =
+              normalizeHeaderFooterLineSpanMode(data.headerLineSpanMode);
+          if (data.footerLineSpanMode !== undefined)
+            designerStore.footerLineSpanMode =
+              normalizeHeaderFooterLineSpanMode(data.footerLineSpanMode);
+          if (data.headerLineSpan !== undefined)
+            designerStore.headerLineSpan = normalizeHeaderFooterLineSpan(
+              data.headerLineSpan,
+              designerStore.headerLineSpanMode,
+            );
+          if (data.footerLineSpan !== undefined)
+            designerStore.footerLineSpan = normalizeHeaderFooterLineSpan(
+              data.footerLineSpan,
+              designerStore.footerLineSpanMode,
+            );
           if (data.showMinimap !== undefined)
             designerStore.showMinimap = data.showMinimap;
           if (data.showHistoryPanel !== undefined)

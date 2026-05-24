@@ -1,6 +1,6 @@
 import { createApp, nextTick, ref, h } from "vue";
 import { createPinia, setActivePinia } from "pinia";
-import i18n, { createI18nInstance } from "./locales";
+import i18n, { createI18nInstance, type SupportedLanguage } from "./locales";
 import baseStyles from "./style.css?inline";
 import PrintDesigner from "./components/PrintDesigner.vue";
 import { useTheme } from "./composables/useTheme";
@@ -77,6 +77,15 @@ export type DesignerPrintDefaults = {
 };
 
 const designerFontStorageKey = "print-designer-font-family";
+
+const supportedLanguages: SupportedLanguage[] = [
+  "zh",
+  "zh-Hant",
+  "en",
+  "ja",
+  "ko",
+  "de",
+];
 
 const applyStoredBrandVars = () => {
   const stored = localStorage.getItem("print-designer-brand-vars");
@@ -220,12 +229,13 @@ class PrintDesignerElement extends HTMLElement {
   }
 
   setLanguage(lang: string) {
-    if (lang === "zh" || lang === "en") {
+    if (supportedLanguages.includes(lang as SupportedLanguage)) {
+      const language = lang as SupportedLanguage;
       if (this.i18n) {
         // @ts-ignore
-        this.i18n.global.locale.value = lang;
+        this.i18n.global.locale.value = language;
       }
-      localStorage.setItem("print-designer-language", lang);
+      localStorage.setItem("print-designer-language", language);
     }
   }
 
@@ -320,8 +330,12 @@ class PrintDesignerElement extends HTMLElement {
 
     app.use(pinia);
 
-    const lang = this.getAttribute("lang") as "zh" | "en" | null;
-    const i18n = createI18nInstance(lang || undefined);
+    const attrLang = this.getAttribute("lang");
+    const lang =
+      attrLang && supportedLanguages.includes(attrLang as SupportedLanguage)
+        ? (attrLang as SupportedLanguage)
+        : undefined;
+    const i18n = createI18nInstance(lang);
     this.i18n = i18n;
     app.use(i18n);
 
@@ -678,6 +692,18 @@ class PrintDesignerElement extends HTMLElement {
       footerHeight: this.designerStore.footerHeight,
       showHeaderLine: this.designerStore.showHeaderLine,
       showFooterLine: this.designerStore.showFooterLine,
+      enableHeaderFooterLineRendering:
+        this.designerStore.enableHeaderFooterLineRendering,
+      headerLineStyle: this.designerStore.headerLineStyle,
+      footerLineStyle: this.designerStore.footerLineStyle,
+      headerLineColor: this.designerStore.headerLineColor,
+      footerLineColor: this.designerStore.footerLineColor,
+      headerLineWidth: this.designerStore.headerLineWidth,
+      footerLineWidth: this.designerStore.footerLineWidth,
+      headerLineSpanMode: this.designerStore.headerLineSpanMode,
+      footerLineSpanMode: this.designerStore.footerLineSpanMode,
+      headerLineSpan: this.designerStore.headerLineSpan,
+      footerLineSpan: this.designerStore.footerLineSpan,
       showMinimap: this.designerStore.showMinimap,
       showHistoryPanel: this.designerStore.showHistoryPanel,
       canvasBackground: this.designerStore.canvasBackground,
@@ -718,6 +744,70 @@ class PrintDesignerElement extends HTMLElement {
       this.designerStore.showHeaderLine = data.showHeaderLine;
     if (data.showFooterLine !== undefined)
       this.designerStore.showFooterLine = data.showFooterLine;
+    if (data.enableHeaderFooterLineRendering !== undefined)
+      this.designerStore.enableHeaderFooterLineRendering = Boolean(
+        data.enableHeaderFooterLineRendering,
+      );
+    if (data.headerLineStyle !== undefined)
+      this.designerStore.headerLineStyle =
+        data.headerLineStyle === "solid" || data.headerLineStyle === "dotted"
+          ? data.headerLineStyle
+          : "dashed";
+    if (data.footerLineStyle !== undefined)
+      this.designerStore.footerLineStyle =
+        data.footerLineStyle === "solid" || data.footerLineStyle === "dotted"
+          ? data.footerLineStyle
+          : "dashed";
+    if (data.headerLineColor !== undefined)
+      this.designerStore.headerLineColor =
+        typeof data.headerLineColor === "string" && data.headerLineColor.trim()
+          ? data.headerLineColor
+          : "#f87171";
+    if (data.footerLineColor !== undefined)
+      this.designerStore.footerLineColor =
+        typeof data.footerLineColor === "string" && data.footerLineColor.trim()
+          ? data.footerLineColor
+          : "#f87171";
+    if (data.headerLineWidth !== undefined)
+      this.designerStore.headerLineWidth = Math.max(
+        1,
+        Math.round(Number(data.headerLineWidth) || 1),
+      );
+    if (data.footerLineWidth !== undefined)
+      this.designerStore.footerLineWidth = Math.max(
+        1,
+        Math.round(Number(data.footerLineWidth) || 1),
+      );
+    if (data.headerLineSpanMode !== undefined)
+      this.designerStore.headerLineSpanMode =
+        data.headerLineSpanMode === "percent" ? "percent" : "value";
+    if (data.footerLineSpanMode !== undefined)
+      this.designerStore.footerLineSpanMode =
+        data.footerLineSpanMode === "percent" ? "percent" : "value";
+    if (data.headerLineSpan !== undefined) {
+      const numeric = Number(data.headerLineSpan);
+      if (this.designerStore.headerLineSpanMode === "percent") {
+        this.designerStore.headerLineSpan = Number.isFinite(numeric)
+          ? Math.min(100, Math.max(1, Number(numeric.toFixed(2))))
+          : 100;
+      } else {
+        this.designerStore.headerLineSpan = Number.isFinite(numeric)
+          ? Math.max(1, Math.round(numeric))
+          : 100;
+      }
+    }
+    if (data.footerLineSpan !== undefined) {
+      const numeric = Number(data.footerLineSpan);
+      if (this.designerStore.footerLineSpanMode === "percent") {
+        this.designerStore.footerLineSpan = Number.isFinite(numeric)
+          ? Math.min(100, Math.max(1, Number(numeric.toFixed(2))))
+          : 100;
+      } else {
+        this.designerStore.footerLineSpan = Number.isFinite(numeric)
+          ? Math.max(1, Math.round(numeric))
+          : 100;
+      }
+    }
     if (data.showMinimap !== undefined)
       this.designerStore.showMinimap = data.showMinimap;
     if (data.showHistoryPanel !== undefined)

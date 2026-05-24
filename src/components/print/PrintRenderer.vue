@@ -72,6 +72,122 @@ const waitForImages = async (timeoutMs = 2000) => {
   ]);
 };
 
+const clamp = (value: number, min: number, max: number) => {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(Math.max(value, min), max);
+};
+
+const getCellBorderInsetRect = (cellEl: HTMLElement, wrapperRect: DOMRect) => {
+  const rect = cellEl.getBoundingClientRect();
+  const style = getWin().getComputedStyle(cellEl);
+  const toPx = (value: string) => {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  };
+
+  return {
+    left: Math.max(rect.left + toPx(style.borderLeftWidth), wrapperRect.left),
+    top: Math.max(rect.top + toPx(style.borderTopWidth), wrapperRect.top),
+    right: Math.min(
+      rect.right - toPx(style.borderRightWidth),
+      wrapperRect.right,
+    ),
+    bottom: Math.min(
+      rect.bottom - toPx(style.borderBottomWidth),
+      wrapperRect.bottom,
+    ),
+  };
+};
+
+const syncEmbeddedAnchorsToRenderedCells = () => {
+  const host = root.value;
+  if (!host) return false;
+
+  const pageNodes = Array.from(
+    host.querySelectorAll<HTMLElement>(".print-page"),
+  );
+  let hasChanged = false;
+  const epsilon = 0.01;
+
+  store.pages.forEach((page, pageIndex) => {
+    const pageNode = pageNodes[pageIndex];
+    if (!pageNode) return;
+
+    const pageRect = pageNode.getBoundingClientRect();
+    const wrapperById = new Map<string, HTMLElement>();
+    pageNode.querySelectorAll<HTMLElement>(".element-wrapper").forEach((el) => {
+      const id = el.getAttribute("data-element-id");
+      if (id) wrapperById.set(id, el);
+    });
+
+    page.elements.forEach((element) => {
+      if (
+        !element.embeddedInTableId ||
+        !element.embeddedInTableCell ||
+        !element.embeddedInTableAnchor
+      ) {
+        return;
+      }
+
+      const tableWrapper = wrapperById.get(element.embeddedInTableId);
+      if (!tableWrapper) return;
+
+      const { rowIndex, colField } = element.embeddedInTableCell;
+      const section = element.embeddedInTableCell.section || "body";
+      const cell = Array.from(
+        tableWrapper.querySelectorAll<HTMLElement>(
+          "td[data-field][data-row-index][data-section]",
+        ),
+      ).find(
+        (cellEl) =>
+          cellEl.dataset.field === colField &&
+          cellEl.dataset.rowIndex === String(rowIndex) &&
+          (cellEl.dataset.section || "body") === section,
+      );
+      if (!cell) return;
+
+      const tableRect = tableWrapper.getBoundingClientRect();
+      const cellRect = getCellBorderInsetRect(cell, tableRect);
+      const cellWidth = Math.max(0, cellRect.right - cellRect.left);
+      const cellHeight = Math.max(0, cellRect.bottom - cellRect.top);
+      if (cellWidth <= 0 || cellHeight <= 0) return;
+
+      const anchor = element.embeddedInTableAnchor;
+      const fillsCellWidth = anchor.fillsWidth === true;
+      const fillsCellHeight = anchor.fillsHeight === true;
+      const nextWidth = fillsCellWidth
+        ? cellWidth
+        : Math.min(cellWidth, Math.max(0, element.width));
+      const nextHeight = fillsCellHeight
+        ? cellHeight
+        : Math.max(0, element.height);
+      const nextX =
+        cellRect.left -
+        pageRect.left +
+        Math.max(0, cellWidth - nextWidth) * clamp(anchor.offsetXRatio, 0, 1);
+      const nextY =
+        cellRect.top -
+        pageRect.top +
+        Math.max(0, cellHeight - nextHeight) * clamp(anchor.offsetYRatio, 0, 1);
+
+      const changed =
+        Math.abs(element.x - nextX) > epsilon ||
+        Math.abs(element.y - nextY) > epsilon ||
+        Math.abs(element.width - nextWidth) > epsilon ||
+        Math.abs(element.height - nextHeight) > epsilon;
+      if (!changed) return;
+
+      element.x = nextX;
+      element.y = nextY;
+      element.width = nextWidth;
+      element.height = nextHeight;
+      hasChanged = true;
+    });
+  });
+
+  return hasChanged;
+};
+
 const applyPayload = async (payload: any) => {
   store.$patch({
     pages: cloneDeep(payload.pages || []),
@@ -83,6 +199,60 @@ const applyPayload = async (payload: any) => {
     pageSpacingY: payload.pageSpacingY ?? store.pageSpacingY,
     showHeaderLine: payload.showHeaderLine ?? false,
     showFooterLine: payload.showFooterLine ?? false,
+    enableHeaderFooterLineRendering:
+      payload.enableHeaderFooterLineRendering ?? false,
+    headerLineStyle:
+      payload.headerLineStyle === "solid" ||
+      payload.headerLineStyle === "dotted"
+        ? payload.headerLineStyle
+        : "dashed",
+    footerLineStyle:
+      payload.footerLineStyle === "solid" ||
+      payload.footerLineStyle === "dotted"
+        ? payload.footerLineStyle
+        : "dashed",
+    headerLineColor:
+      typeof payload.headerLineColor === "string" &&
+      payload.headerLineColor.trim()
+        ? payload.headerLineColor
+        : "#f87171",
+    footerLineColor:
+      typeof payload.footerLineColor === "string" &&
+      payload.footerLineColor.trim()
+        ? payload.footerLineColor
+        : "#f87171",
+    headerLineWidth: Math.max(
+      1,
+      Math.round(Number(payload.headerLineWidth) || 1),
+    ),
+    footerLineWidth: Math.max(
+      1,
+      Math.round(Number(payload.footerLineWidth) || 1),
+    ),
+    headerLineSpanMode:
+      payload.headerLineSpanMode === "percent" ? "percent" : "value",
+    footerLineSpanMode:
+      payload.footerLineSpanMode === "percent" ? "percent" : "value",
+    headerLineSpan:
+      payload.headerLineSpanMode === "percent"
+        ? Math.min(
+            100,
+            Math.max(
+              1,
+              Number(Number(payload.headerLineSpan || 100).toFixed(2)),
+            ),
+          )
+        : Math.max(1, Math.round(Number(payload.headerLineSpan) || 100)),
+    footerLineSpan:
+      payload.footerLineSpanMode === "percent"
+        ? Math.min(
+            100,
+            Math.max(
+              1,
+              Number(Number(payload.footerLineSpan || 100).toFixed(2)),
+            ),
+          )
+        : Math.max(1, Math.round(Number(payload.footerLineSpan) || 100)),
     showGrid: false,
     showCornerMarkers: false,
     zoom: 1,
@@ -111,6 +281,11 @@ const applyPayload = async (payload: any) => {
   await nextTick();
   // Wait for async rendering components like QRCode and Barcode which registered their tasks
   await Promise.all(renderTasks.value);
+  if (syncEmbeddedAnchorsToRenderedCells()) {
+    renderTasks.value = [];
+    await nextTick();
+    await Promise.all(renderTasks.value);
+  }
   await waitForFonts();
   await waitForImages();
   requestAnimationFrame(() => {

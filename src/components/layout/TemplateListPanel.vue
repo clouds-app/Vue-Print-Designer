@@ -94,7 +94,9 @@ const getTemplateModalSavedValues = (
   mode: "create" | "edit" | "copy",
 ) => {
   if (!templateId) return {};
-  const template = templateStore.templates.find((item) => item.id === templateId);
+  const template = templateStore.templates.find(
+    (item) => item.id === templateId,
+  );
 
   const ext = template?.ext || {};
   const cacheExt = templateStore.templateDetailCache?.[templateId]?.ext || {};
@@ -110,7 +112,11 @@ const getTemplateModalSavedValues = (
     modeValues = { ...cacheForm[mode] };
   } else {
     const lastMode = extForm.lastMode || cacheForm.lastMode;
-    if (lastMode && extForm[lastMode] && typeof extForm[lastMode] === "object") {
+    if (
+      lastMode &&
+      extForm[lastMode] &&
+      typeof extForm[lastMode] === "object"
+    ) {
       modeValues = { ...extForm[lastMode] };
     } else if (
       lastMode &&
@@ -173,7 +179,9 @@ const resolveIconFromIconField = (icon: string | undefined) => {
 };
 
 const normalizeSearchValue = (value: string | undefined) =>
-  String(value || "").trim().toLowerCase();
+  String(value || "")
+    .trim()
+    .toLowerCase();
 
 const normalizedSearchQuery = computed(() =>
   normalizeSearchValue(searchQuery.value),
@@ -417,7 +425,10 @@ const handleDelete = async (template: Template) => {
   );
   if (confirmed) {
     await templateStore.deleteTemplate(template.id);
-    if (!templateStore.currentTemplateId && templateStore.templates.length > 0) {
+    if (
+      !templateStore.currentTemplateId &&
+      templateStore.templates.length > 0
+    ) {
       await templateStore.loadTemplate(templateStore.templates[0].id);
     }
   }
@@ -662,8 +673,16 @@ watch(activeTab, () => {
 
 onMounted(async () => {
   await templateStore.loadTemplates();
-  window.addEventListener("designer:new-template", handleCreate as EventListener, true);
-  window.addEventListener("designer:save-as", handleSaveAsEvent as EventListener, true);
+  window.addEventListener(
+    "designer:new-template",
+    handleCreate as EventListener,
+    true,
+  );
+  window.addEventListener(
+    "designer:save-as",
+    handleSaveAsEvent as EventListener,
+    true,
+  );
 
   if (!templateStore.currentTemplateId && templateStore.templates.length > 0) {
     await templateStore.loadTemplate(templateStore.templates[0].id);
@@ -671,8 +690,16 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  window.removeEventListener("designer:new-template", handleCreate as EventListener, true);
-  window.removeEventListener("designer:save-as", handleSaveAsEvent as EventListener, true);
+  window.removeEventListener(
+    "designer:new-template",
+    handleCreate as EventListener,
+    true,
+  );
+  window.removeEventListener(
+    "designer:save-as",
+    handleSaveAsEvent as EventListener,
+    true,
+  );
 });
 </script>
 
@@ -769,7 +796,8 @@ onUnmounted(() => {
             type="button"
             class="row-menu-trigger p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
             :class="{
-              'opacity-100 bg-gray-200 dark:bg-gray-600': activeMenuId === item.id,
+              'opacity-100 bg-gray-200 dark:bg-gray-600':
+                activeMenuId === item.id,
             }"
             @click.stop="toggleRowMenu($event, item.id)"
           >
@@ -822,7 +850,9 @@ onUnmounted(() => {
 
               <div
                 v-if="
-                  item.children && item.children.length > 0 && isNodeExpanded(item.id)
+                  item.children &&
+                  item.children.length > 0 &&
+                  isNodeExpanded(item.id)
                 "
                 class="ml-6 border-l border-gray-200 dark:border-gray-600 pl-1 mt-1 space-y-1"
               >

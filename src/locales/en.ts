@@ -46,6 +46,17 @@ export default {
     new: "New Template",
     edit: "Edit Template",
     confirmDelete: 'Are you sure you want to delete "{name}"?',
+    help: {
+      title: "Template List Guide",
+      items: {
+        manage:
+          "Create, copy, edit, delete, and switch the active template here.",
+        variables:
+          "The Variables tab shows template variables for binding text, images, codes, and table data.",
+        persist:
+          "Saving a template stores the canvas elements, page settings, and test data together.",
+      },
+    },
   },
   editor: {
     preview: "Print Preview",
@@ -95,11 +106,20 @@ export default {
     showMinimap: "Show Minimap",
     showHistoryPanel: "Show History Panel",
     historyPanel: "History",
+    historyPanelSubtitle: "View undo and redo",
     historyUndoStack: "Undo Stack",
     historyRedoStack: "Redo Stack",
     historyStep: "Step {index}",
     historySnapshotInfo: "{pages} pages · {elements} elements",
     historyNoRecords: "No records",
+    historyHelp: {
+      title: "History Guide",
+      items: {
+        undo: "Undo stack lists actions you can roll back",
+        redo: "Redo stack lists actions you can restore",
+        panel: "You can drag the panel and resize from bottom right",
+      },
+    },
     historyAction: {
       unknown: "Unknown action",
       pageAdd: "Add page",
@@ -128,6 +148,21 @@ export default {
     headerFooter: "Header & Footer",
     headerLine: "Header Line",
     footerLine: "Footer Line",
+    headerFooterLineAdvancedSettings: "Header/Footer Line Advanced Settings",
+    enableHeaderFooterLineRendering: "Enable Header/Footer Line Rendering",
+    unifiedHeaderFooterLineSettings: "Unified Settings",
+    headerFooterLineUnified: "Unified Line",
+    headerFooterLineStyleLabel: "Line Style",
+    headerFooterLineColorLabel: "Line Color",
+    headerFooterLineWidthLabel: "Line Width",
+    headerFooterLineHorizontalWidthModeLabel: "Horizontal Width Mode",
+    headerFooterLineHorizontalWidthLabel: "Horizontal Width",
+    headerFooterLineSpanModeValue: "Value",
+    headerFooterLineSpanModePercent: "Percentage",
+    headerFooterLineDisabledHint:
+      "When disabled, default line color is used and header/footer lines are not rendered in preview/print.",
+    headerFooterLineAdvancedHint:
+      "Configure line style, color, stroke width, and horizontal width. Horizontal width supports value and percentage modes.",
     addNewPage: "Add New Page",
     fonts: {
       default: "Default",
@@ -169,6 +204,7 @@ export default {
     alignBottom: "Align Bottom",
     splitCells: "Split Cells",
     mergeCells: "Merge Cells",
+    insertMenu: "Insert...",
     matchWidth: "Match Width",
     matchHeight: "Match Height",
     matchSize: "Match Size",
@@ -210,9 +246,20 @@ export default {
       inWords: "In Words",
     },
   },
-  sidebar: {
+  elementsPanel: {
     elements: "Elements",
     dragToCanvas: "Drag elements to the canvas",
+    help: {
+      title: "Elements Panel Guide",
+      items: {
+        standard:
+          "Drag standard elements such as text, image, table, barcode, QR code, and shapes onto the canvas.",
+        custom:
+          "The Custom tab lists saved combinations or business elements for reuse.",
+        variables:
+          "Elements that support variables can bind ＠ variables and use runtime data in print/preview.",
+      },
+    },
     standard: "Standard",
     custom: "Custom",
     general: "General",
@@ -248,6 +295,7 @@ export default {
   elements: {
     text: "Text",
     image: "Image",
+    noImage: "No Image",
     table: "Table",
     line: "Line",
     rect: "Rect",
@@ -317,6 +365,81 @@ export default {
       repeatPerPageExclusive:
         "Repeat Per Page is unavailable when Auto Height is enabled",
     },
+    help: {
+      show: "Show property help",
+      hide: "Hide property help",
+      title: {
+        none: "Property Help",
+        multi: "Multi-select Help",
+        text: "Text Element Help",
+        image: "Image Element Help",
+        table: "Table Variables and Scripts",
+        pageNumber: "Page Number Help",
+        barcode: "Barcode Help",
+        qrcode: "QR Code Help",
+        line: "Line Help",
+        shape: "Shape Help",
+      },
+      items: {
+        noneSelect:
+          "Select an element on the canvas to edit its properties and style here.",
+        nonePanel:
+          "The Properties, Style, and Advanced tabs change with the selected element type.",
+        multiSelect:
+          "Multi-select keeps only safe batch actions; select one element to edit its properties.",
+        multiLayer:
+          "Use the toolbar or context menu for batch layer and alignment operations.",
+        textContent:
+          "Content stores static text; use the variable field with ＠name for bound data.",
+        textVariable:
+          "Designer mode reads variables from test data; print/preview prefers runtime variables.",
+        imageSource:
+          "Image source can be a URL, base64 data, or an image URL supplied by a variable.",
+        imageVariable:
+          "Image variables are useful for avatars, product images, signatures, and stamps.",
+        tableDataVariable:
+          "The data variable name is fully customizable and not limited to ＠orders/＠items/＠list. The data variable only needs to resolve to an array at runtime: each array item is one row, and row object keys must match column field values one-to-one (for example, if fields are name and qty, each row should contain name and qty).",
+        tableColumnsVariable:
+          "Columns variable ＠columns can provide dynamic field, header, and width values.",
+        tableFooterVariable:
+          "Footer data variable ＠footer can provide footer rows; double-click footer cells to edit display text and variable field.",
+        tableCellValueVariable:
+          "＠customerName inside a cell value is resolved; unresolved variables keep their original token.",
+        tableCellStyleScope:
+          "When cells are selected, text styling from the toolbar and property panel applies to selected cells first, instead of the whole table.",
+        tableCellMergeSplit:
+          "Cells support merge and split operations. Select target cells first, then use merge/split actions in the top toolbar.",
+        tableCellResizeBehavior:
+          "When dragging column width or row height, embedded elements in cells update in real time and stay inside cell borders without overflow or border overlap.",
+        tableCellEditKeys:
+          "Cell editing supports keyboard controls: arrow keys move the caret, Enter commits current input, and Esc cancels the current edit.",
+        tableFooterField:
+          "Footer variable fields can be customized for your business. When you need automatic totals, use built-in summary tokens (current examples): ｛#pageSum｝/｛#pageQty｝ for page totals, and ｛#totalSum｝/｛#totalQty｝/｛#totalCap｝ for grand totals.",
+        tableScript:
+          "Custom scripts receive data, footerData, columns, and type; type is global or page.",
+        tableScriptReturn:
+          "Scripts can return ｛ data, footerData, columns ｝ to rewrite rows, footers, or dynamic columns.",
+        tableSelectedCell:
+          "When cells are selected, row height in the property panel applies to the selected rows.",
+        pageFormat:
+          "Page format can combine current page, total pages, and label text.",
+        pageLabel:
+          "Labels can appear before or after the number, useful for formats like Page X.",
+        barcodeContent:
+          "Barcode value comes from content and can also bind to an ＠ variable.",
+        qrcodeContent:
+          "QR code value comes from content and can also bind to an ＠ variable.",
+        codeVariable:
+          "Print/preview prefers runtime variable values; designer mode uses test data.",
+        lineStyle:
+          "Lines are mainly controlled by thickness, color, and rotation.",
+        lineSize: "Changing width and height changes line length and hit area.",
+        shapeStyle:
+          "Shapes are styled with fill, border, radius, and related appearance controls.",
+        shapeSize:
+          "Width and height define shape size; rotation and layer can be adjusted from style or toolbar controls.",
+      },
+    },
     label: {
       type: "Type",
       textAlign: "Text Align",
@@ -370,6 +493,8 @@ export default {
       editCell: "Edit Cell",
       editColumn: "Edit Column",
       cellTextAlign: "Cell Alignment",
+      cellTextPosition: "Text Position (Embedded)",
+      cellTextLayer: "Text Layer (Embedded)",
       headerText: "Header Text",
       fieldKey: "Field Key",
       variableField: "Variable Field",
@@ -381,7 +506,7 @@ export default {
       barcodeContentPlaceholder: "Barcode Value",
       qrContentPlaceholder: "QR Code Value",
       textContentPlaceholder: "Enter text content",
-      variablePlaceholder: "Variable Name (e.g. @name)",
+      variablePlaceholder: "Variable Name (e.g. ＠name)",
       labelText: "Label Text",
       labelPosition: "Label Position",
       labelFontSize: "Label Font Size",
@@ -423,6 +548,9 @@ export default {
       bottom: "Bottom",
       before: "Before",
       after: "After",
+      overlap: "Overlap",
+      above: "Text Above",
+      below: "Text Below",
       eccLow: "Low (7%)",
       eccMedium: "Medium (15%)",
       eccQuartile: "Quartile (25%)",
@@ -523,9 +651,12 @@ export default {
     autoSave: "Auto Save",
     autoSaveDesc: "Automatically save changes (saved templates only).",
     textQuickToolbar: "Text Element Quick Toolbar",
-    textQuickToolbarDesc: "Show the floating quick toolbar when a text element is selected.",
-    showMinimapDesc: "Show a draggable minimap floating panel in the canvas area.",
-    showHistoryPanelDesc: "Show a draggable history floating panel in the canvas area.",
+    textQuickToolbarDesc:
+      "Show the floating quick toolbar when a text element is selected.",
+    showMinimapDesc:
+      "Show a draggable minimap floating panel in the canvas area.",
+    showHistoryPanelDesc:
+      "Show a draggable history floating panel in the canvas area.",
     developerMode: "Developer Mode",
     developerModeDesc: "When off, hide Blob/JSON debug view entries.",
     printQuality: "Print Quality",
@@ -598,7 +729,11 @@ export default {
     cancelRetry: "Cancel Retry",
     selectLanguage: "Select Language",
     zhLabel: "Chinese",
+    zhHantLabel: "Traditional Chinese",
     enLabel: "English",
+    jaLabel: "Japanese",
+    koLabel: "Korean",
+    deLabel: "German",
   },
   printDialog: {
     title: "Print Options",

@@ -88,6 +88,21 @@ export interface TableColumn {
   width: number;
 }
 
+export interface TableCellRef {
+  rowIndex: number;
+  colField: string;
+  section?: "body" | "footer";
+}
+
+export interface EmbeddedInTableAnchor {
+  offsetXRatio: number;
+  offsetYRatio: number;
+  widthRatio: number;
+  heightRatio: number;
+  fillsWidth?: boolean;
+  fillsHeight?: boolean;
+}
+
 export interface PrintElement {
   id: string;
   type: ElementType;
@@ -110,6 +125,11 @@ export interface PrintElement {
   footerData?: any[]; // For table
   customScript?: string; // For table (data processing)
   customScriptVariable?: string; // For table (data processing script variable)
+  embeddedCellTextPosition?: "overlap" | "top" | "bottom";
+  embeddedCellTextLayer?: "above" | "below";
+  embeddedInTableId?: string;
+  embeddedInTableCell?: TableCellRef;
+  embeddedInTableAnchor?: EmbeddedInTableAnchor;
   repeatPerPage?: boolean;
   style: ElementStyle;
   // Pagination-specific (optional)
@@ -181,11 +201,7 @@ export interface ListContextMenuConfig {
   items: ListContextMenuItem[];
 }
 
-export type TemplateMenuActionKey =
-  | "edit"
-  | "copy"
-  | "delete"
-  | "testData";
+export type TemplateMenuActionKey = "edit" | "copy" | "delete" | "testData";
 
 export type TemplateModalMode = "create" | "edit" | "copy";
 export type TemplateModalFieldType =
@@ -256,6 +272,17 @@ export interface CustomElementEditSnapshot {
   footerHeight: number;
   showHeaderLine: boolean;
   showFooterLine: boolean;
+  enableHeaderFooterLineRendering: boolean;
+  headerLineStyle: "solid" | "dashed" | "dotted";
+  footerLineStyle: "solid" | "dashed" | "dotted";
+  headerLineColor: string;
+  footerLineColor: string;
+  headerLineWidth: number;
+  footerLineWidth: number;
+  headerLineSpanMode: "value" | "percent";
+  footerLineSpanMode: "value" | "percent";
+  headerLineSpan: number;
+  footerLineSpan: number;
   showMinimap: boolean;
   showHistoryPanel: boolean;
   canvasBackground: string;
@@ -311,6 +338,17 @@ export interface DesignerState {
   footerHeight: number;
   showHeaderLine: boolean;
   showFooterLine: boolean;
+  enableHeaderFooterLineRendering: boolean;
+  headerLineStyle: "solid" | "dashed" | "dotted";
+  footerLineStyle: "solid" | "dashed" | "dotted";
+  headerLineColor: string;
+  footerLineColor: string;
+  headerLineWidth: number;
+  footerLineWidth: number;
+  headerLineSpanMode: "value" | "percent";
+  footerLineSpanMode: "value" | "percent";
+  headerLineSpan: number;
+  footerLineSpan: number;
   showMinimap: boolean;
   showHistoryPanel: boolean;
   showTextQuickToolbar: boolean;

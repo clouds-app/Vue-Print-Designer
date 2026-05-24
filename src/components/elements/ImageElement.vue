@@ -14,6 +14,14 @@ const { t } = useI18n();
 const store = useDesignerStore();
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
+const shouldFillForEmbeddedCell = computed(() => {
+  if (!props.element.embeddedInTableId) return false;
+  const anchor = props.element.embeddedInTableAnchor;
+  if (!anchor) return false;
+
+  return anchor.fillsWidth === true && anchor.fillsHeight === true;
+});
+
 const resolvedContent = computed(() => {
   if (props.element.variable) {
     const key = normalizeVariableKey(props.element.variable);
@@ -153,10 +161,13 @@ export const elementPropertiesSchema: ElementPropertiesSchema = {
     <img
       v-if="resolvedContent"
       :src="resolvedContent"
-      class="w-full h-full object-contain pointer-events-none"
+      :class="[
+        'w-full h-full pointer-events-none',
+        shouldFillForEmbeddedCell ? 'object-fill' : 'object-contain',
+      ]"
       alt="Element"
     />
-    <span v-else class="text-gray-400 text-xs">No Image</span>
+    <span v-else class="text-gray-400 text-xs">{{ t("elements.noImage") }}</span>
     <input
       ref="fileInputRef"
       type="file"

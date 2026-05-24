@@ -45,6 +45,16 @@ export default {
     new: "新建模版",
     edit: "编辑模版",
     confirmDelete: '确定要删除 "{name}" 吗？',
+    help: {
+      title: "模版列表说明",
+      items: {
+        manage: "这里用于新建、复制、编辑、删除和切换当前模版。",
+        variables:
+          "变量页签展示当前模版可用变量，方便绑定文本、图片、条码和表格数据。",
+        persist:
+          "保存或另存为模版后，当前画布元素、页面设置和测试数据会一起保存。",
+      },
+    },
   },
   editor: {
     preview: "打印预览",
@@ -94,11 +104,20 @@ export default {
     showMinimap: "显示缩略图",
     showHistoryPanel: "显示历史记录",
     historyPanel: "历史记录",
+    historyPanelSubtitle: "查看撤销与重做",
     historyUndoStack: "撤销记录",
     historyRedoStack: "重做记录",
     historyStep: "步骤 {index}",
     historySnapshotInfo: "{pages} 页 · {elements} 元素",
     historyNoRecords: "暂无记录",
+    historyHelp: {
+      title: "历史记录说明",
+      items: {
+        undo: "撤销记录展示可回退的操作",
+        redo: "重做记录展示可恢复的操作",
+        panel: "支持拖拽移动和右下角缩放",
+      },
+    },
     historyAction: {
       unknown: "未知操作",
       pageAdd: "新增页面",
@@ -127,6 +146,21 @@ export default {
     headerFooter: "页眉页脚",
     headerLine: "页眉线",
     footerLine: "页脚线",
+    headerFooterLineAdvancedSettings: "页眉/页脚线高级设置",
+    enableHeaderFooterLineRendering: "启用页眉/页脚线渲染",
+    unifiedHeaderFooterLineSettings: "统一设置",
+    headerFooterLineUnified: "统一线条",
+    headerFooterLineStyleLabel: "线条样式",
+    headerFooterLineColorLabel: "线条颜色",
+    headerFooterLineWidthLabel: "线条宽度",
+    headerFooterLineHorizontalWidthModeLabel: "横向宽度模式",
+    headerFooterLineHorizontalWidthLabel: "横向宽度",
+    headerFooterLineSpanModeValue: "按数值",
+    headerFooterLineSpanModePercent: "按百分比",
+    headerFooterLineDisabledHint:
+      "关闭时使用默认线条颜色，且预览/打印不渲染页眉/页脚线。",
+    headerFooterLineAdvancedHint:
+      "可设置线条样式、颜色、线条宽度和横向宽度；横向宽度支持按数值或百分比设置。",
     addNewPage: "添加新页",
     fonts: {
       default: "默认",
@@ -168,6 +202,7 @@ export default {
     alignBottom: "底部对齐",
     splitCells: "拆分单元格",
     mergeCells: "合并单元格",
+    insertMenu: "插入...",
     matchWidth: "等宽",
     matchHeight: "等高",
     matchSize: "等宽高",
@@ -209,10 +244,19 @@ export default {
       inWords: "大写金额",
     },
   },
-  sidebar: {
+  elementsPanel: {
     custom: "自定义",
     elements: "元素库",
     dragToCanvas: "拖拽元素到画布",
+    help: {
+      title: "元素库说明",
+      items: {
+        standard:
+          "标准元素可直接拖到画布，包含文本、图片、表格、条码、二维码和图形。",
+        custom: "自定义页签会显示保存过的组合或业务元素，便于重复使用。",
+        variables: "支持变量的元素可绑定 ＠变量，打印/预览时使用外部传入数据。",
+      },
+    },
     standard: "标准元素",
     general: "通用",
     dataCodes: "数据 & 条码",
@@ -247,6 +291,7 @@ export default {
   elements: {
     text: "文本",
     image: "图片",
+    noImage: "暂无图片",
     table: "表格",
     line: "直线",
     rect: "矩形",
@@ -313,6 +358,68 @@ export default {
       autoHeightExclusive: "启用每页重复时，自适应高度不可用",
       repeatPerPageExclusive: "启用自适应高度时，每页重复不可用",
     },
+    help: {
+      show: "显示属性帮助",
+      hide: "隐藏属性帮助",
+      title: {
+        none: "属性帮助",
+        multi: "多选帮助",
+        text: "文本元素帮助",
+        image: "图片元素帮助",
+        table: "表格变量与脚本",
+        pageNumber: "页码元素帮助",
+        barcode: "条形码元素帮助",
+        qrcode: "二维码元素帮助",
+        line: "直线元素帮助",
+        shape: "形状元素帮助",
+      },
+      items: {
+        noneSelect: "选择画布上的元素后，这里会显示该元素可编辑的属性和样式。",
+        nonePanel: "属性、样式、高级三个页签会按元素类型展示不同控制项。",
+        multiSelect:
+          "多选时只保留批量删除等安全操作，单个元素属性需要先切回单选。",
+        multiLayer: "层级、对齐等批量操作优先在顶部工具栏或快捷菜单中完成。",
+        textContent: "内容字段保存静态文本；绑定变量时可在变量字段填 ＠name。",
+        textVariable:
+          "设计态从测试数据读取变量，打印/预览时优先读取外部传入变量。",
+        imageSource: "图片来源可以是 URL、base64 或由变量提供的图片地址。",
+        imageVariable: "图片变量适合绑定头像、商品图、签章等运行时资源。",
+        tableDataVariable:
+          "数据变量名可完全自定义，不限于 ＠orders/＠items/＠list。数据变量只要在运行时指向一个数组即可：数组每一项代表一行，行对象的 key 必须与列定义的 field 一一对应（例如 field 为 name、qty 时，每行需包含 name、qty）。",
+        tableColumnsVariable:
+          "列定义变量 ＠columns 可动态提供 field、header、width。",
+        tableFooterVariable:
+          "表脚数据变量 ＠footer 可动态提供表脚行；双击表脚单元格可编辑显示文本和变量字段。",
+        tableCellValueVariable:
+          "单元格 value 中的 ＠customerName 会被解析；未命中变量时保留原 token。",
+        tableCellStyleScope:
+          "选中单元格后，工具栏和属性面板的文本样式会优先作用于选中单元格，而不是整张表。",
+        tableCellMergeSplit:
+          "单元格支持合并与拆分；先选中目标单元格，再使用顶部工具栏的拆分/合并按钮。",
+        tableCellResizeBehavior:
+          "拖拽列宽或行高时，单元格内绑定元素会实时跟随，并保持在边框内不溢出、不覆盖边框线。",
+        tableCellEditKeys:
+          "单元格编辑支持键盘操作：方向键在输入框内移动光标，Enter 提交当前值，Esc 取消本次编辑。",
+        tableFooterField:
+          "表脚变量字段可按业务自定义填写；需要自动汇总时可使用内置占位符（以下为当前示例）：｛#pageSum｝/｛#pageQty｝ 表示本页汇总，｛#totalSum｝/｛#totalQty｝/｛#totalCap｝ 表示总汇总。",
+        tableScript:
+          "自定义脚本会收到 data、footerData、columns、type；type 为 global 或 page。",
+        tableScriptReturn:
+          "脚本可返回 ｛ data, footerData, columns ｝，用于改写行数据、表脚和动态列。",
+        tableSelectedCell:
+          "当前选中单元格时，属性面板的行高会应用到所选单元格所在整行。",
+        pageFormat: "页码格式支持当前页、总页数和标签文本组合。",
+        pageLabel: "标签位置可放在页码前后，适合“第 X 页”这类格式。",
+        barcodeContent: "条形码内容来自内容字段，也可以绑定 ＠变量。",
+        qrcodeContent: "二维码内容来自内容字段，也可以绑定 ＠变量。",
+        codeVariable:
+          "打印/预览时变量优先使用运行时传入值，设计态使用测试数据。",
+        lineStyle: "直线主要通过粗细、颜色和旋转控制视觉效果。",
+        lineSize: "调整宽高会改变线段长度和命中区域。",
+        shapeStyle: "形状元素主要通过填充、边框、圆角等样式控制外观。",
+        shapeSize: "宽高决定形状尺寸，旋转和层级可在样式或工具栏中调整。",
+      },
+    },
     label: {
       textAlign: "对齐方式",
       type: "类型",
@@ -366,6 +473,8 @@ export default {
       editCell: "编辑单元格",
       editColumn: "编辑列",
       cellTextAlign: "单元格对齐",
+      cellTextPosition: "文本位置（绑定元素）",
+      cellTextLayer: "文本层级（绑定元素）",
       headerText: "表头文本",
       fieldKey: "字段键",
       variableField: "变量字段",
@@ -377,7 +486,7 @@ export default {
       barcodeContentPlaceholder: "条码内容",
       qrContentPlaceholder: "二维码内容",
       textContentPlaceholder: "请输入文本内容",
-      variablePlaceholder: "变量名 (例如 @name)",
+      variablePlaceholder: "变量名 (例如 ＠name)",
       labelText: "标签文本",
       labelPosition: "标签位置",
       labelFontSize: "标签字号",
@@ -419,6 +528,9 @@ export default {
       bottom: "底部",
       before: "之前",
       after: "之后",
+      overlap: "重叠",
+      above: "文本在上层",
+      below: "文本在下层",
       eccLow: "低 (7%)",
       eccMedium: "中 (15%)",
       eccQuartile: "四分 (25%)",
@@ -547,7 +659,8 @@ export default {
     printModeBrowser: "浏览器打印",
     printModeDesc: "本地/远程需连接测试成功后才能启用。",
     silentPrint: "静默打印",
-    silentPrintDesc: "开启后跳过自定义打印对话框；浏览器打印仍会弹出浏览器打印设置。",
+    silentPrintDesc:
+      "开启后跳过自定义打印对话框；浏览器打印仍会弹出浏览器打印设置。",
     localConnection: "本地客户端打印",
     remoteConnection: "远程云打印",
     host: "主机",
@@ -594,7 +707,11 @@ export default {
     cancelRetry: "停止重试",
     selectLanguage: "选择语言",
     zhLabel: "中文",
+    zhHantLabel: "繁體中文",
     enLabel: "English",
+    jaLabel: "日语",
+    koLabel: "韩语",
+    deLabel: "德语",
   },
   printDialog: {
     title: "打印参数",

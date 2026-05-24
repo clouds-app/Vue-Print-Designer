@@ -32,10 +32,287 @@ const getQueryRoot = () => {
   );
 };
 
+type LocatedElement = {
+  pageIndex: number;
+  elementIndex: number;
+  element: PrintElement;
+};
+
+type EmbeddedCellBounds = {
+  tableId: string;
+  colField: string;
+  rowIndex: number;
+  section: "body" | "footer";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  tableElement: PrintElement;
+};
+
+type SectionRowMetrics = {
+  rowCount: number;
+  totalHeight: number;
+  firstHeight: number | null;
+  heights: number[];
+};
+
+type TableResizeBase = {
+  elementId: string;
+  width: number;
+  height: number;
+  columns: any[] | null;
+  style: Record<string, any>;
+  data: any[] | null;
+  footerData: any[] | null;
+  headerMetrics: SectionRowMetrics;
+  bodyMetrics: SectionRowMetrics;
+  footerMetrics: SectionRowMetrics;
+  structureSignature: string;
+};
+
+const tableResizeReference = ref<TableResizeBase | null>(null);
+
+const findElementInPages = (id: string): LocatedElement | null => {
+  for (let pageIndex = 0; pageIndex < store.pages.length; pageIndex += 1) {
+    const page = store.pages[pageIndex];
+    const elementIndex = page.elements.findIndex((item) => item.id === id);
+    if (elementIndex === -1) continue;
+
+    return {
+      pageIndex,
+      elementIndex,
+      element: page.elements[elementIndex],
+    };
+  }
+
+  return null;
+};
+
+const getCellBorderInsetRect = (
+  cellEl: HTMLElement,
+  wrapperRect: DOMRect,
+  zoom: number,
+) => {
+  const rect = cellEl.getBoundingClientRect();
+  const style = window.getComputedStyle(cellEl);
+  const toViewportPx = (value: string) => {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed * zoom : 0;
+  };
+
+  return {
+    left: Math.max(
+      rect.left + toViewportPx(style.borderLeftWidth),
+      wrapperRect.left,
+    ),
+    top: Math.max(
+      rect.top + toViewportPx(style.borderTopWidth),
+      wrapperRect.top,
+    ),
+    right: Math.min(
+      rect.right - toViewportPx(style.borderRightWidth),
+      wrapperRect.right,
+    ),
+    bottom: Math.min(
+      rect.bottom - toViewportPx(style.borderBottomWidth),
+      wrapperRect.bottom,
+    ),
+  };
+};
+
+const getEmbeddedCellBounds = (): EmbeddedCellBounds | null => {
+  const tableId = props.element.embeddedInTableId;
+  const cellRef = props.element.embeddedInTableCell;
+  if (!tableId || !cellRef) return null;
+
+  const locatedTable = findElementInPages(tableId);
+  if (!locatedTable) return null;
+
+  const targetSection = cellRef.section === "footer" ? "footer" : "body";
+  const targetRowIndex = Number(cellRef.rowIndex);
+  if (!Number.isFinite(targetRowIndex)) return null;
+
+  const tableWrapper = getQueryRoot().querySelector(
+    `.element-wrapper[data-element-id="${tableId}"]`,
+  ) as HTMLElement | null;
+  if (!tableWrapper) return null;
+
+  const candidateCells = tableWrapper.querySelectorAll<HTMLElement>(
+    "td[data-field][data-row-index][data-section]",
+  );
+
+  let matchedCell: HTMLElement | null = null;
+  for (const cellEl of candidateCells) {
+    if (
+      cellEl.dataset.field === cellRef.colField &&
+      cellEl.dataset.rowIndex === String(targetRowIndex) &&
+      (cellEl.dataset.section || "body") === targetSection
+    ) {
+      matchedCell = cellEl;
+      break;
+    }
+  }
+
+  if (!matchedCell) return null;
+
+  const zoom = props.zoom || store.zoom || 1;
+  const wrapperRect = tableWrapper.getBoundingClientRect();
+  const visibleRect = getCellBorderInsetRect(matchedCell, wrapperRect, zoom);
+
+  return {
+    tableId,
+    colField: cellRef.colField,
+    rowIndex: targetRowIndex,
+    section: targetSection,
+    x: locatedTable.element.x + (visibleRect.left - wrapperRect.left) / zoom,
+    y: locatedTable.element.y + (visibleRect.top - wrapperRect.top) / zoom,
+    width: Math.max(0, visibleRect.right - visibleRect.left) / zoom,
+    height: Math.max(0, visibleRect.bottom - visibleRect.top) / zoom,
+    tableElement: locatedTable.element,
+  };
+};
+
+const clampToEmbeddedCellBounds = (
+  targetX: number,
+  targetY: number,
+  cellBounds: EmbeddedCellBounds,
+) => {
+  const maxX =
+    cellBounds.x + Math.max(0, cellBounds.width - props.element.width);
+  const maxY =
+    cellBounds.y + Math.max(0, cellBounds.height - props.element.height);
+
+  return {
+    x: Math.min(Math.max(cellBounds.x, targetX), maxX),
+    y: Math.min(Math.max(cellBounds.y, targetY), maxY),
+  };
+};
+
+const maybeExpandEmbeddedCell = (
+  requiredWidth: number,
+  requiredHeight: number,
+  cellBounds: EmbeddedCellBounds,
+) => {
+  const offsetX = Math.max(0, props.element.x - cellBounds.x);
+  const offsetY = Math.max(0, props.element.y - cellBounds.y);
+  const requiredCellWidth = offsetX + requiredWidth;
+  const requiredCellHeight = offsetY + requiredHeight;
+  const shouldExpandWidth = requiredCellWidth > cellBounds.width;
+  const shouldExpandHeight = requiredCellHeight > cellBounds.height;
+
+  if (!shouldExpandWidth && !shouldExpandHeight) return;
+
+  const tableElement = cellBounds.tableElement;
+  const nextUpdates: Partial<PrintElement> = {};
+  let hasChanges = false;
+
+  if (
+    shouldExpandWidth &&
+    Array.isArray(tableElement.columns) &&
+    tableElement.columns.length > 0
+  ) {
+    const colIndex = tableElement.columns.findIndex(
+      (col) => col.field === cellBounds.colField,
+    );
+    if (colIndex !== -1) {
+      const nextColumns = tableElement.columns.map((col) => ({ ...col }));
+      const currentColWidth =
+        Number(nextColumns[colIndex].width) || Math.max(1, cellBounds.width);
+      const widthDeficit = Math.max(0, requiredCellWidth - cellBounds.width);
+      const targetColWidth = Math.ceil(currentColWidth + widthDeficit);
+
+      if (targetColWidth > currentColWidth) {
+        const widthDelta = targetColWidth - currentColWidth;
+        nextColumns[colIndex] = {
+          ...nextColumns[colIndex],
+          width: targetColWidth,
+        };
+        nextUpdates.columns = nextColumns;
+        nextUpdates.width = Math.max(
+          tableElement.width,
+          tableElement.width + widthDelta,
+        );
+        hasChanges = true;
+      }
+    }
+  }
+
+  const rowKey = cellBounds.section === "footer" ? "footerData" : "data";
+  const sourceRows = (tableElement as any)[rowKey];
+  if (
+    shouldExpandHeight &&
+    Array.isArray(sourceRows) &&
+    sourceRows[cellBounds.rowIndex]
+  ) {
+    const nextRows = JSON.parse(JSON.stringify(sourceRows));
+    const row = nextRows[cellBounds.rowIndex] || {};
+    const currentRawCell = row[cellBounds.colField];
+    const cellObject =
+      currentRawCell && typeof currentRawCell === "object"
+        ? { ...currentRawCell }
+        : { value: currentRawCell ?? "" };
+
+    const currentStyle =
+      cellObject.style && typeof cellObject.style === "object"
+        ? { ...cellObject.style }
+        : {};
+
+    const parsedCurrentHeight = Number.parseFloat(
+      String(currentStyle.height ?? ""),
+    );
+    const currentCellHeight = Number.isFinite(parsedCurrentHeight)
+      ? parsedCurrentHeight
+      : Math.max(1, cellBounds.height);
+    const heightDeficit = Math.max(0, requiredCellHeight - cellBounds.height);
+    const targetCellHeight = Math.ceil(currentCellHeight + heightDeficit);
+
+    if (targetCellHeight > currentCellHeight) {
+      const heightDelta = targetCellHeight - currentCellHeight;
+      cellObject.style = {
+        ...currentStyle,
+        height: `${targetCellHeight}px`,
+      };
+      row[cellBounds.colField] = cellObject;
+      nextRows[cellBounds.rowIndex] = row;
+      if (rowKey === "footerData") {
+        nextUpdates.footerData = nextRows;
+      } else {
+        nextUpdates.data = nextRows;
+      }
+
+      const baseHeight =
+        typeof nextUpdates.height === "number"
+          ? nextUpdates.height
+          : tableElement.height;
+      nextUpdates.height = Math.max(
+        baseHeight,
+        tableElement.height + heightDelta,
+      );
+      hasChanges = true;
+    }
+  }
+
+  if (!hasChanges) return;
+  store.updateElement(tableElement.id, nextUpdates, false);
+};
+
 const actualIsSelected = computed(() => {
   const isMultiSelected =
     !props.isSelected && store.selectedElementIds.includes(props.element.id);
   return !props.readOnly && (props.isSelected || isMultiSelected);
+});
+
+const embeddedTableTextLayer = computed<"above" | "below" | null>(() => {
+  if (!props.element.embeddedInTableId) return null;
+  const locatedTable = findElementInPages(props.element.embeddedInTableId);
+  if (!locatedTable || locatedTable.element.type !== ElementType.TABLE) {
+    return null;
+  }
+
+  return locatedTable.element.embeddedCellTextLayer === "above"
+    ? "above"
+    : "below";
 });
 
 const shouldConstrainToCanvas = computed(() => !store.allowDragOutsideCanvas);
@@ -86,6 +363,16 @@ const style = computed(() => {
     transform: `rotate(${props.element.style.rotate || 0}deg)`,
     ...props.element.style,
   };
+
+  if (props.element.embeddedInTableId) {
+    const parsedZIndex = Number.parseFloat(String(baseStyle.zIndex ?? "1"));
+    const resolvedZIndex = Number.isFinite(parsedZIndex) ? parsedZIndex : 1;
+
+    baseStyle.zIndex =
+      embeddedTableTextLayer.value === "above"
+        ? Math.min(resolvedZIndex, 0)
+        : Math.max(resolvedZIndex, 2);
+  }
 
   if (props.element.type === ElementType.TEXT) {
     const inheritedTextKeys = [
@@ -187,7 +474,8 @@ const handleMouseDown = (e: MouseEvent) => {
   )
     return;
 
-  // e.stopPropagation();
+  // Prevent bubbling to page-level marquee selection start.
+  e.stopPropagation();
 
   // Check for multi-select (Ctrl/Cmd key)
   const isMultiSelect = e.ctrlKey || e.metaKey;
@@ -240,6 +528,29 @@ const handleMouseMove = (e: MouseEvent) => {
     if (!hasSnapshot) {
       store.snapshot("editor.historyAction.elementMove");
       hasSnapshot = true;
+    }
+
+    const embeddedCellBounds = getEmbeddedCellBounds();
+    if (embeddedCellBounds) {
+      const clamped = clampToEmbeddedCellBounds(
+        initialLeft + dx,
+        initialTop + dy,
+        embeddedCellBounds,
+      );
+
+      store.setHighlightedGuide(null);
+      store.setHighlightedEdge(null);
+      store.setHighlightedAlignedElements([]);
+
+      store.updateElement(
+        props.element.id,
+        {
+          x: clamped.x,
+          y: clamped.y,
+        },
+        false,
+      );
+      return;
     }
 
     if (
@@ -611,6 +922,401 @@ const handleResizeStart = (e: MouseEvent) => {
   const startY = e.clientY;
   const initialWidth = props.element.width;
   const initialHeight = props.element.height;
+  const isTableResize = props.element.type === ElementType.TABLE;
+  const MIN_TABLE_CELL_SIZE = 0.01;
+
+  const toFinitePositive = (value: unknown): number | null => {
+    const parsed =
+      typeof value === "number"
+        ? value
+        : Number.parseFloat(String(value ?? ""));
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return parsed;
+  };
+
+  const getRowMetricsFromElements = (
+    rows: HTMLElement[],
+  ): SectionRowMetrics => {
+    const heights = rows
+      .map((row) =>
+        toFinitePositive(row.getBoundingClientRect().height / props.zoom),
+      )
+      .filter((height): height is number => height !== null);
+
+    return {
+      rowCount: heights.length,
+      totalHeight: heights.reduce((total, height) => total + height, 0),
+      firstHeight: heights[0] ?? null,
+      heights,
+    };
+  };
+
+  const getRowMetrics = (selector: string): SectionRowMetrics => {
+    const host = elementRef.value;
+    if (!host)
+      return { rowCount: 0, totalHeight: 0, firstHeight: null, heights: [] };
+    return getRowMetricsFromElements(
+      Array.from(host.querySelectorAll<HTMLElement>(selector)),
+    );
+  };
+
+  const getCellSectionRowMetrics = (selector: string): SectionRowMetrics => {
+    const host = elementRef.value;
+    if (!host)
+      return { rowCount: 0, totalHeight: 0, firstHeight: null, heights: [] };
+
+    const rowSet = new Set<HTMLElement>();
+    for (const cell of Array.from(
+      host.querySelectorAll<HTMLElement>(selector),
+    )) {
+      const row = cell.closest("tr") as HTMLElement | null;
+      if (row) rowSet.add(row);
+    }
+
+    return getRowMetricsFromElements(Array.from(rowSet));
+  };
+
+  const getRowStyleHeight = (row: any) => {
+    if (!row || typeof row !== "object") return null;
+
+    for (const key of Object.keys(row)) {
+      const cell = row[key];
+      if (!cell || typeof cell !== "object") continue;
+      const height = toFinitePositive((cell.style as any)?.height);
+      if (height) return height;
+    }
+
+    return null;
+  };
+
+  const getRowsStyleHeights = (rows: any[] | null) => {
+    return Array.isArray(rows)
+      ? rows.map((row) => getRowStyleHeight(row) || 0)
+      : [];
+  };
+
+  const getColumnWidths = (columns: any[] | null) => {
+    return Array.isArray(columns)
+      ? columns.map((col) => toFinitePositive(col.width) || 0)
+      : [];
+  };
+
+  const areUniformlyScaled = (base: number[], current: number[]) => {
+    if (base.length !== current.length) return false;
+
+    let scale: number | null = null;
+    for (let index = 0; index < base.length; index += 1) {
+      const baseValue = base[index];
+      const currentValue = current[index];
+      if (baseValue <= 0 && currentValue <= 0) continue;
+      if (baseValue <= 0 || currentValue <= 0) return false;
+
+      const nextScale = currentValue / baseValue;
+      if (scale === null) {
+        scale = nextScale;
+        continue;
+      }
+
+      const tolerance = Math.max(0.03, 1.5 / Math.max(baseValue, currentValue));
+      if (Math.abs(nextScale - scale) > tolerance) return false;
+    }
+
+    return true;
+  };
+
+  const isCurrentTableResizeBaseDerivedFromReference = (
+    reference: TableResizeBase,
+    current: TableResizeBase,
+  ) => {
+    return (
+      areUniformlyScaled(
+        getColumnWidths(reference.columns),
+        getColumnWidths(current.columns),
+      ) &&
+      areUniformlyScaled(
+        getRowsStyleHeights(reference.data),
+        getRowsStyleHeights(current.data),
+      ) &&
+      areUniformlyScaled(
+        getRowsStyleHeights(reference.footerData),
+        getRowsStyleHeights(current.footerData),
+      )
+    );
+  };
+
+  const getTableResizeStructureSignature = () => {
+    const columnSignature = Array.isArray(props.element.columns)
+      ? props.element.columns.map((col) => col.field).join("|")
+      : "";
+    const dataCount = Array.isArray(props.element.data)
+      ? props.element.data.length
+      : 0;
+    const footerCount = Array.isArray(props.element.footerData)
+      ? props.element.footerData.length
+      : 0;
+
+    return `${columnSignature}/${dataCount}/${footerCount}`;
+  };
+
+  const captureTableResizeBase = (): TableResizeBase => ({
+    elementId: props.element.id,
+    width: Math.max(MIN_SIZE, props.element.width || initialWidth),
+    height: Math.max(MIN_SIZE, props.element.height || initialHeight),
+    columns: Array.isArray(props.element.columns)
+      ? props.element.columns.map((col) => ({ ...col }))
+      : null,
+    style: { ...(props.element.style || {}) },
+    data: Array.isArray(props.element.data)
+      ? JSON.parse(JSON.stringify(props.element.data))
+      : null,
+    footerData: Array.isArray(props.element.footerData)
+      ? JSON.parse(JSON.stringify(props.element.footerData))
+      : null,
+    headerMetrics: getRowMetrics("thead tr"),
+    bodyMetrics: getRowMetrics("tbody tr:not([data-table-spacer-row])"),
+    footerMetrics: getCellSectionRowMetrics('td[data-section="footer"]'),
+    structureSignature: getTableResizeStructureSignature(),
+  });
+
+  const currentTableResizeBase = isTableResize
+    ? captureTableResizeBase()
+    : null;
+  if (currentTableResizeBase) {
+    const reference = tableResizeReference.value;
+    const shouldReplaceReference =
+      !reference ||
+      reference.elementId !== props.element.id ||
+      reference.structureSignature !==
+        currentTableResizeBase.structureSignature ||
+      !isCurrentTableResizeBaseDerivedFromReference(
+        reference,
+        currentTableResizeBase,
+      ) ||
+      (currentTableResizeBase.width >= reference.width - 0.5 &&
+        currentTableResizeBase.height >= reference.height - 0.5);
+
+    if (shouldReplaceReference) {
+      tableResizeReference.value = currentTableResizeBase;
+    }
+  }
+
+  const scaleRowsCellStyleHeight = (
+    rows: any[] | null,
+    scaleY: number,
+  ): { rows: any[] | null; changed: boolean } => {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { rows, changed: false };
+    }
+
+    const nextRows = JSON.parse(JSON.stringify(rows));
+    let changed = false;
+
+    for (const row of nextRows) {
+      if (!row || typeof row !== "object") continue;
+      for (const key of Object.keys(row)) {
+        const cell = row[key];
+        if (!cell || typeof cell !== "object") continue;
+        const style = cell.style;
+        if (!style || typeof style !== "object") continue;
+
+        const rawHeight = (style as any).height;
+        const parsedHeight = toFinitePositive(rawHeight);
+        if (!parsedHeight) continue;
+
+        const scaledHeight = Number(
+          Math.max(MIN_TABLE_CELL_SIZE, parsedHeight * scaleY).toFixed(2),
+        );
+        row[key] = {
+          ...cell,
+          style: {
+            ...(style as any),
+            height: `${scaledHeight}px`,
+          },
+        };
+        changed = true;
+      }
+    }
+
+    return { rows: nextRows, changed };
+  };
+
+  const tableResizeBase = isTableResize
+    ? tableResizeReference.value || currentTableResizeBase
+    : null;
+
+  const buildScaledTableUpdates = (
+    width: number,
+    height: number,
+  ): Partial<PrintElement> => {
+    if (
+      !tableResizeBase ||
+      tableResizeBase.width <= 0 ||
+      tableResizeBase.height <= 0
+    ) {
+      return { width, height };
+    }
+
+    const scaleX = width / tableResizeBase.width;
+    const scaleY = height / tableResizeBase.height;
+    const updates: Partial<PrintElement> = {
+      width,
+      height,
+    };
+
+    if (Array.isArray(tableResizeBase.columns)) {
+      const scaledColumns = tableResizeBase.columns.map((col) => {
+        const baseWidth = toFinitePositive(col.width) || 1;
+        return {
+          ...col,
+          width: Math.max(MIN_TABLE_CELL_SIZE, baseWidth * scaleX),
+        };
+      });
+      const totalScaledWidth = scaledColumns.reduce(
+        (total, col) => total + (toFinitePositive(col.width) || 0),
+        0,
+      );
+      const columnNormalizeScale =
+        totalScaledWidth > 0 ? width / totalScaledWidth : 1;
+      updates.columns = scaledColumns.map((col) => ({
+        ...col,
+        width: Number(
+          Math.max(
+            MIN_TABLE_CELL_SIZE,
+            (toFinitePositive(col.width) || MIN_TABLE_CELL_SIZE) *
+              columnNormalizeScale,
+          ).toFixed(2),
+        ),
+      }));
+    }
+
+    const nextStyle = { ...tableResizeBase.style } as Record<string, any>;
+    let styleChanged = false;
+
+    const getBaseRowHeight = (
+      rawHeight: unknown,
+      metrics: SectionRowMetrics,
+    ) => {
+      return (
+        toFinitePositive(rawHeight) ||
+        (metrics.rowCount > 0 && metrics.totalHeight > 0
+          ? metrics.totalHeight / metrics.rowCount
+          : metrics.firstHeight)
+      );
+    };
+
+    const baseHeaderRowHeight = getBaseRowHeight(
+      nextStyle.headerHeight,
+      tableResizeBase.headerMetrics,
+    );
+    const baseBodyRowHeight = getBaseRowHeight(
+      nextStyle.rowHeight,
+      tableResizeBase.bodyMetrics,
+    );
+    const baseFooterRowHeight = getBaseRowHeight(
+      nextStyle.footerHeight,
+      tableResizeBase.footerMetrics,
+    );
+
+    const buildSectionRowHeights = (
+      rows: any[] | null,
+      metrics: SectionRowMetrics,
+      fallbackHeight: number | null,
+    ) => {
+      const heights: number[] = [];
+      for (let index = 0; index < metrics.rowCount; index += 1) {
+        const rowStyleHeight = Array.isArray(rows)
+          ? getRowStyleHeight(rows[index])
+          : null;
+        const height =
+          rowStyleHeight ||
+          fallbackHeight ||
+          metrics.heights[index] ||
+          metrics.firstHeight ||
+          0;
+        if (height > 0) heights.push(height);
+      }
+
+      return heights;
+    };
+
+    const headerRowHeights = buildSectionRowHeights(
+      null,
+      tableResizeBase.headerMetrics,
+      baseHeaderRowHeight,
+    );
+    const bodyRowHeights = buildSectionRowHeights(
+      tableResizeBase.data,
+      tableResizeBase.bodyMetrics,
+      baseBodyRowHeight,
+    );
+    const footerRowHeights = buildSectionRowHeights(
+      tableResizeBase.footerData,
+      tableResizeBase.footerMetrics,
+      baseFooterRowHeight,
+    );
+
+    const baseRowsTotalHeight =
+      headerRowHeights.reduce((total, rowHeight) => total + rowHeight, 0) +
+      bodyRowHeights.reduce((total, rowHeight) => total + rowHeight, 0) +
+      footerRowHeights.reduce((total, rowHeight) => total + rowHeight, 0);
+    const rowNormalizeScale =
+      baseRowsTotalHeight > 0 ? height / baseRowsTotalHeight : scaleY;
+
+    if (baseHeaderRowHeight && tableResizeBase.headerMetrics.rowCount > 0) {
+      nextStyle.headerHeight = Number(
+        Math.max(
+          MIN_TABLE_CELL_SIZE,
+          baseHeaderRowHeight * rowNormalizeScale,
+        ).toFixed(2),
+      );
+      styleChanged = true;
+    }
+
+    if (baseBodyRowHeight && tableResizeBase.bodyMetrics.rowCount > 0) {
+      nextStyle.rowHeight = Number(
+        Math.max(
+          MIN_TABLE_CELL_SIZE,
+          baseBodyRowHeight * rowNormalizeScale,
+        ).toFixed(2),
+      );
+      styleChanged = true;
+    }
+
+    if (baseFooterRowHeight && tableResizeBase.footerMetrics.rowCount > 0) {
+      nextStyle.footerHeight = Number(
+        Math.max(
+          MIN_TABLE_CELL_SIZE,
+          baseFooterRowHeight * rowNormalizeScale,
+        ).toFixed(2),
+      );
+      styleChanged = true;
+    }
+
+    if (styleChanged) {
+      updates.style = {
+        ...props.element.style,
+        ...nextStyle,
+      };
+    }
+
+    const scaledData = scaleRowsCellStyleHeight(
+      tableResizeBase.data,
+      rowNormalizeScale,
+    );
+    if (scaledData.changed && scaledData.rows) {
+      updates.data = scaledData.rows;
+    }
+
+    const scaledFooterData = scaleRowsCellStyleHeight(
+      tableResizeBase.footerData,
+      rowNormalizeScale,
+    );
+    if (scaledFooterData.changed && scaledFooterData.rows) {
+      updates.footerData = scaledFooterData.rows;
+    }
+
+    return updates;
+  };
   hasSnapshot = false;
   store.setDragging(true);
   store.setHighlightedGuide(null);
@@ -649,14 +1355,23 @@ const handleResizeStart = (e: MouseEvent) => {
       snapped.highlightedAlignedElementIds || [],
     );
 
-    store.updateElement(
-      props.element.id,
-      {
-        width: snapped.width,
-        height: snapped.height,
-      },
-      false,
-    );
+    const embeddedCellBounds = getEmbeddedCellBounds();
+    if (embeddedCellBounds) {
+      maybeExpandEmbeddedCell(
+        snapped.width,
+        snapped.height,
+        embeddedCellBounds,
+      );
+    }
+
+    const updates = isTableResize
+      ? buildScaledTableUpdates(snapped.width, snapped.height)
+      : {
+          width: snapped.width,
+          height: snapped.height,
+        };
+
+    store.updateElement(props.element.id, updates, false);
   };
 
   const handleResizeUp = () => {
@@ -680,6 +1395,38 @@ const handleResizeStart = (e: MouseEvent) => {
     :data-element-id="element.id"
     :data-read-only="readOnly ? 'true' : 'false'"
     :data-repeat-per-page="element.repeatPerPage === true ? 'true' : null"
+    :data-embedded-table-id="element.embeddedInTableId || null"
+    :data-embedded-cell-row-index="
+      element.embeddedInTableCell
+        ? String(element.embeddedInTableCell.rowIndex)
+        : null
+    "
+    :data-embedded-cell-col-field="
+      element.embeddedInTableCell?.colField || null
+    "
+    :data-embedded-cell-section="
+      element.embeddedInTableCell
+        ? element.embeddedInTableCell.section || 'body'
+        : null
+    "
+    :data-embedded-anchor-offset-x-ratio="
+      element.embeddedInTableAnchor?.offsetXRatio ?? null
+    "
+    :data-embedded-anchor-offset-y-ratio="
+      element.embeddedInTableAnchor?.offsetYRatio ?? null
+    "
+    :data-embedded-anchor-width-ratio="
+      element.embeddedInTableAnchor?.widthRatio ?? null
+    "
+    :data-embedded-anchor-height-ratio="
+      element.embeddedInTableAnchor?.heightRatio ?? null
+    "
+    :data-embedded-anchor-fills-width="
+      element.embeddedInTableAnchor?.fillsWidth === true ? 'true' : null
+    "
+    :data-embedded-anchor-fills-height="
+      element.embeddedInTableAnchor?.fillsHeight === true ? 'true' : null
+    "
     :data-alignment-target="isAlignmentTarget ? 'true' : null"
     :class="[
       readOnly ? 'cursor-not-allowed' : '',

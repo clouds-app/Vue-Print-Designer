@@ -60,7 +60,7 @@ export interface PrintDesignerElement extends HTMLElement {
   setTheme(theme: string): void;
   setDesignerFont(fontFamily: string, options?: { persist?: boolean }): void;
   setFontOptions(options?: DesignerFontOption[]): void;
-  setLanguage(lang: "zh" | "en"): void;
+  setLanguage(lang: "zh" | "zh-Hant" | "en" | "ja" | "ko" | "de"): void;
   getPrintQuality(): "fast" | "normal" | "high" | "ultra";
   setPrintQuality(quality: "fast" | "normal" | "high" | "ultra"): void;
 

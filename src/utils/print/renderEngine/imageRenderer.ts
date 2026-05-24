@@ -224,6 +224,149 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
     );
   };
 
+  const clamp = (value: number, min: number, max: number) => {
+    if (!Number.isFinite(value)) return min;
+    return Math.min(Math.max(value, min), max);
+  };
+
+  const readRatio = (value: string | undefined) => {
+    if (value === undefined) return null;
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed)) return null;
+    return clamp(parsed, 0, 1);
+  };
+
+  const getCellBorderInsetRect = (
+    cellEl: HTMLElement,
+    wrapperRect: DOMRect,
+  ) => {
+    const rect = cellEl.getBoundingClientRect();
+    const style = window.getComputedStyle(cellEl);
+    const toPx = (value: string) => {
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    };
+
+    return {
+      left: Math.max(rect.left + toPx(style.borderLeftWidth), wrapperRect.left),
+      top: Math.max(rect.top + toPx(style.borderTopWidth), wrapperRect.top),
+      right: Math.min(
+        rect.right - toPx(style.borderRightWidth),
+        wrapperRect.right,
+      ),
+      bottom: Math.min(
+        rect.bottom - toPx(style.borderBottomWidth),
+        wrapperRect.bottom,
+      ),
+    };
+  };
+
+  const inlineEmbeddedWrapperIntoTableCell = (
+    wrapper: HTMLElement,
+    wrapperById: Map<string, HTMLElement>,
+  ) => {
+    const tableId = wrapper.dataset.embeddedTableId;
+    const rowIndexRaw = wrapper.dataset.embeddedCellRowIndex;
+    const colField = wrapper.dataset.embeddedCellColField;
+    const section = wrapper.dataset.embeddedCellSection || "body";
+    if (!tableId || rowIndexRaw === undefined || !colField) return false;
+
+    const tableWrapper = wrapperById.get(tableId);
+    if (!tableWrapper || tableWrapper === wrapper) return false;
+
+    const rowIndex = Number(rowIndexRaw);
+    if (!Number.isFinite(rowIndex)) return false;
+
+    const candidateCells = tableWrapper.querySelectorAll<HTMLElement>(
+      "td[data-field][data-row-index][data-section]",
+    );
+
+    let matchedCell: HTMLElement | null = null;
+    for (const cellEl of candidateCells) {
+      if (
+        cellEl.dataset.field === colField &&
+        cellEl.dataset.rowIndex === String(rowIndex) &&
+        (cellEl.dataset.section || "body") === section
+      ) {
+        matchedCell = cellEl;
+        break;
+      }
+    }
+
+    if (!matchedCell) return false;
+
+    const tableRect = tableWrapper.getBoundingClientRect();
+    const cellRect = getCellBorderInsetRect(matchedCell, tableRect);
+    const cellWidth = Math.max(0, cellRect.right - cellRect.left);
+    const cellHeight = Math.max(0, cellRect.bottom - cellRect.top);
+    if (cellWidth <= 0 || cellHeight <= 0) return false;
+
+    const offsetXRatio = readRatio(wrapper.dataset.embeddedAnchorOffsetXRatio);
+    const offsetYRatio = readRatio(wrapper.dataset.embeddedAnchorOffsetYRatio);
+    const widthRatio = readRatio(wrapper.dataset.embeddedAnchorWidthRatio);
+    const heightRatio = readRatio(wrapper.dataset.embeddedAnchorHeightRatio);
+    const fillsWidth = wrapper.dataset.embeddedAnchorFillsWidth === "true";
+    const fillsHeight = wrapper.dataset.embeddedAnchorFillsHeight === "true";
+
+    let nextWidth: number;
+    let nextHeight: number;
+    let nextLeft: number;
+    let nextTop: number;
+    const wrapperRect = wrapper.getBoundingClientRect();
+    nextWidth = Math.min(cellWidth, Math.max(0, wrapperRect.width));
+    nextHeight = Math.max(0, wrapperRect.height);
+
+    if (
+      offsetXRatio !== null &&
+      offsetYRatio !== null &&
+      widthRatio !== null &&
+      heightRatio !== null
+    ) {
+      if (fillsWidth) nextWidth = cellWidth;
+      if (fillsHeight) nextHeight = cellHeight;
+      nextLeft = Math.max(0, cellWidth - nextWidth) * offsetXRatio;
+      nextTop = Math.max(0, cellHeight - nextHeight) * offsetYRatio;
+    } else {
+      nextLeft = clamp(
+        wrapperRect.left - cellRect.left,
+        0,
+        Math.max(0, cellWidth - nextWidth),
+      );
+      nextTop = clamp(
+        wrapperRect.top - cellRect.top,
+        0,
+        Math.max(0, cellHeight - nextHeight),
+      );
+    }
+
+    matchedCell.style.position = "relative";
+    matchedCell.style.overflow = "hidden";
+    wrapper.setAttribute("data-print-embedded-wrapper", "true");
+    wrapper.removeAttribute("data-print-wrapper");
+    wrapper.removeAttribute("data-flow-id");
+    wrapper.removeAttribute("data-flow-kind");
+    wrapper.removeAttribute("data-original-top");
+    wrapper.removeAttribute("data-original-height");
+    wrapper.style.position = "absolute";
+    wrapper.style.left = `${nextLeft}px`;
+    wrapper.style.top = `${nextTop}px`;
+    wrapper.style.width = `${nextWidth}px`;
+    wrapper.style.height = `${nextHeight}px`;
+    wrapper.style.margin = "0";
+    wrapper.style.right = "auto";
+    wrapper.style.bottom = "auto";
+    wrapper.style.clipPath = "none";
+
+    const requiredCellHeight = Math.max(cellHeight, nextTop + nextHeight);
+    if (requiredCellHeight > cellHeight + 0.01) {
+      matchedCell.style.height = `${requiredCellHeight}px`;
+      matchedCell.style.minHeight = `${requiredCellHeight}px`;
+    }
+
+    matchedCell.appendChild(wrapper);
+    return true;
+  };
+
   // 渲染前预处理：克隆页面、清理节点、分页并同步页码。
   const processContentForImage = async (
     content: RenderContent,
@@ -281,13 +424,26 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
       clone.style.transform = "none";
       clone.style.backgroundColor = store.canvasBackground;
 
+      container.appendChild(clone);
+
       clone
         .querySelectorAll('[data-print-exclude="true"]')
         .forEach((el) => el.remove());
 
-      const wrappers = clone.querySelectorAll(".element-wrapper");
+      const wrappers = Array.from(
+        clone.querySelectorAll<HTMLElement>(".element-wrapper"),
+      );
+      const wrapperById = new Map<string, HTMLElement>();
+      wrappers.forEach((wrapper) => {
+        const id = wrapper.getAttribute("data-element-id");
+        if (id) wrapperById.set(id, wrapper);
+      });
       wrappers.forEach((w, wrapperIndex) => {
         const el = w as HTMLElement;
+
+        if (inlineEmbeddedWrapperIntoTableCell(el, wrapperById)) {
+          return;
+        }
 
         if (isWrapperFullyOutsideCanvas(el, width, height)) {
           el.remove();
@@ -309,8 +465,27 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
 
         const table = el.querySelector("table");
         const autoHeightEl = el.querySelector('[data-auto-height="true"]');
+        const marginTop = store.pageSpacingY || 0;
+        const marginBottom = store.pageSpacingY || 0;
+        const isHeaderTable =
+          !!table &&
+          store.showHeaderLine &&
+          store.headerHeight > 0 &&
+          resolvedTop + resolvedHeight <= store.headerHeight + marginTop;
+        const isFooterTable =
+          !!table &&
+          store.showFooterLine &&
+          store.footerHeight > 0 &&
+          resolvedTop >= height - store.footerHeight - marginBottom;
 
-        if (table) {
+        if (table && (isHeaderTable || isFooterTable)) {
+          table.setAttribute("data-auto-paginate", "false");
+          el.removeAttribute("data-flow-id");
+          el.removeAttribute("data-flow-kind");
+        } else if (
+          table &&
+          table.getAttribute("data-auto-paginate") === "true"
+        ) {
           el.setAttribute("data-flow-id", wrapperSeq);
           el.setAttribute("data-flow-kind", "table");
         } else if (autoHeightEl) {
@@ -334,8 +509,6 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
           if (h) svg.style.height = h.includes("px") ? h : `${h}px`;
         }
       });
-
-      container.appendChild(clone);
     });
 
     await new Promise((resolve) => setTimeout(resolve, 200));

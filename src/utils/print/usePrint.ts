@@ -74,8 +74,23 @@ export const usePrint = () => {
       if (i === 0) continue;
       const page = withRepeats[i];
 
+      const clonedIdByOriginalId = new Map<string, string>();
+      repeatedElements.forEach((el) => {
+        clonedIdByOriginalId.set(el.id, uuidv4());
+      });
+
       for (const el of repeatedElements) {
-        page.elements.push({ ...cloneDeep(el), id: uuidv4() });
+        const cloned = cloneDeep(el);
+        cloned.id = clonedIdByOriginalId.get(el.id) || uuidv4();
+        if (
+          cloned.embeddedInTableId &&
+          clonedIdByOriginalId.has(cloned.embeddedInTableId)
+        ) {
+          cloned.embeddedInTableId = clonedIdByOriginalId.get(
+            cloned.embeddedInTableId,
+          );
+        }
+        page.elements.push(cloned);
       }
     }
     return withRepeats;

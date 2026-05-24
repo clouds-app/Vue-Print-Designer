@@ -67,11 +67,7 @@ const testDataContent = ref("");
 const testDataTarget = ref<Template | null>(null);
 const testDataAllowedKeys = ref<string[]>([]);
 
-type TemplateMenuActionKey =
-  | "testData"
-  | "edit"
-  | "copy"
-  | "delete";
+type TemplateMenuActionKey = "testData" | "edit" | "copy" | "delete";
 type TemplateMenuItemView = ListContextMenuItem & { iconComponent?: Component };
 type ModalSavePayload = string | Record<string, any>;
 const maxVisibleTemplateTags = 2;
@@ -383,7 +379,7 @@ const filteredTemplates = computed(() => {
   if (!searchQuery.value) return store.templates;
   const lowerQuery = searchQuery.value.toLowerCase();
   return store.templates.filter((t) =>
-    t.name.toLowerCase().includes(lowerQuery)
+    t.name.toLowerCase().includes(lowerQuery),
   );
 });
 
@@ -846,7 +842,11 @@ const modalTitle = computed(() => {
             v-if="filteredTemplates.length === 0"
             class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center"
           >
-            {{ store.templates.length === 0 ? t("template.noTemplates") : t("common.noData", "No results found") }}
+            {{
+              store.templates.length === 0
+                ? t("template.noTemplates")
+                : t("common.noData", "No results found")
+            }}
           </div>
 
           <div
@@ -858,7 +858,9 @@ const modalTitle = computed(() => {
             :title="t.name"
           >
             <div class="flex items-center gap-2 overflow-hidden flex-1">
-              <div class="w-2 h-2 flex items-center justify-center flex-shrink-0">
+              <div
+                class="w-2 h-2 flex items-center justify-center flex-shrink-0"
+              >
                 <div
                   class="w-1.5 h-1.5 rounded-full bg-blue-500"
                   v-if="store.currentTemplateId === t.id"

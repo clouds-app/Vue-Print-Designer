@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, inject, ref, type Ref } from "vue";
+import { computed, inject, ref, watch, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDesignerStore } from "@/stores/designer";
 import { toast } from "@/utils/toast";
+import { useFloatingTooltip } from "@/composables/useFloatingTooltip";
 import {
   ElementType,
   type ElementPropertiesSchema,
@@ -32,17 +33,21 @@ import FormatAlignLeft from "~icons/material-symbols/format-align-left";
 import FormatAlignCenter from "~icons/material-symbols/format-align-center";
 import FormatAlignRight from "~icons/material-symbols/format-align-right";
 import Close from "~icons/material-symbols/close";
+import Help from "~icons/material-symbols/help";
 import InputModal from "@/components/common/InputModal.vue";
 
 const { t } = useI18n();
 const store = useDesignerStore();
 const designerInstanceId = inject<string | null>("designer-instance-id", null);
+const modalContainer = inject("modal-container", ref<HTMLElement | null>(null));
 const isHandPanActive = inject<Ref<boolean>>(
   "designer-hand-pan-active",
   ref(false),
 );
 const element = computed(() => store.selectedElement);
 const isMultiSelected = computed(() => store.selectedElementIds.length > 1);
+const selectedElementId = computed(() => element.value?.id || "");
+const selectedElementType = computed(() => element.value?.type || "");
 const isLocked = computed(() => element.value?.locked || false);
 const isEditingDisabled = computed(
   () => isLocked.value || !store.isTemplateEditable,
@@ -52,6 +57,21 @@ const isStyleEditingDisabled = computed(
 );
 const showCustomElementModal = ref(false);
 const customElementInitialName = ref("");
+const showPropertyHelp = ref(false);
+const propertyHelpButtonRef = ref<HTMLElement | null>(null);
+const propertyHelpTooltipRef = ref<HTMLElement | null>(null);
+const {
+  arrowStyle: propertyHelpArrowStyle,
+  placement: propertyHelpPlacement,
+  toggleTooltip: togglePropertyHelp,
+  tooltipStyle: propertyHelpTooltipStyle,
+  updateTooltipPosition: updatePropertyHelpTooltipPosition,
+} = useFloatingTooltip(
+  showPropertyHelp,
+  propertyHelpButtonRef,
+  propertyHelpTooltipRef,
+  { width: 320 },
+);
 
 const isSelfStyled = computed(() => {
   if (!element.value) return false;
@@ -75,10 +95,23 @@ const isTextRepeatPerPageEnabled = computed(
 const hasTextBehaviorConflict = computed(
   () => isTextAutoHeightEnabled.value && isTextRepeatPerPageEnabled.value,
 );
+const isTableInHeaderOrFooter = computed(() => {
+  if (!element.value || element.value.type !== ElementType.TABLE) return false;
+  return store.isElementInHeaderOrFooterRegion(element.value);
+});
 
 const isFieldDisabled = (field: PropertyField) => {
   if (isEditingDisabled.value) return true;
   if (isHandPanActive.value && field.target === "style") return true;
+
+  if (
+    element.value?.type === ElementType.TABLE &&
+    field.target === "element" &&
+    field.key === "autoPaginate"
+  ) {
+    return isTableInHeaderOrFooter.value;
+  }
+
   if (!isTextElement.value || field.type !== "switch") return false;
   if (hasTextBehaviorConflict.value) return false;
 
@@ -96,6 +129,125 @@ const isFieldDisabled = (field: PropertyField) => {
 const canMergeCells = computed(() => {
   if (!store.tableSelection) return false;
   return store.tableSelection.cells.length > 1;
+});
+
+const hasSelectedTableCells = computed(() => {
+  return (
+    element.value?.type === ElementType.TABLE &&
+    store.tableSelection?.elementId === element.value.id &&
+    store.tableSelection.cells.length > 0
+  );
+});
+
+const shouldApplyRowHeightToSelectedRows = (field: PropertyField) => {
+  return (
+    hasSelectedTableCells.value &&
+    field.target === "style" &&
+    field.key === "rowHeight"
+  );
+};
+
+const getPropertyHelpItems = (...keys: string[]) => {
+  return keys.map((key) => t(`properties.help.items.${key}`));
+};
+
+const propertyHelpContent = computed(() => {
+  if (isMultiSelected.value) {
+    return {
+      title: t("properties.help.title.multi"),
+      items: getPropertyHelpItems("multiSelect", "multiLayer"),
+    };
+  }
+
+  if (!element.value) {
+    return {
+      title: t("properties.help.title.none"),
+      items: getPropertyHelpItems("noneSelect", "nonePanel"),
+    };
+  }
+
+  switch (selectedElementType.value) {
+    case ElementType.TEXT:
+      return {
+        title: t("properties.help.title.text"),
+        items: getPropertyHelpItems("textContent", "textVariable"),
+      };
+    case ElementType.IMAGE:
+      return {
+        title: t("properties.help.title.image"),
+        items: getPropertyHelpItems("imageSource", "imageVariable"),
+      };
+    case ElementType.TABLE:
+      return {
+        title: t("properties.help.title.table"),
+        items: [
+          ...getPropertyHelpItems(
+            "tableDataVariable",
+            "tableColumnsVariable",
+            "tableFooterVariable",
+            "tableCellValueVariable",
+            "tableCellStyleScope",
+            "tableCellMergeSplit",
+            "tableCellResizeBehavior",
+            "tableCellEditKeys",
+            "tableFooterField",
+            "tableScript",
+            "tableScriptReturn",
+          ),
+          ...(hasSelectedTableCells.value
+            ? getPropertyHelpItems("tableSelectedCell")
+            : []),
+        ],
+      };
+    case ElementType.PAGE_NUMBER:
+      return {
+        title: t("properties.help.title.pageNumber"),
+        items: getPropertyHelpItems("pageFormat", "pageLabel"),
+      };
+    case ElementType.BARCODE:
+      return {
+        title: t("properties.help.title.barcode"),
+        items: getPropertyHelpItems("barcodeContent", "codeVariable"),
+      };
+    case ElementType.QRCODE:
+      return {
+        title: t("properties.help.title.qrcode"),
+        items: getPropertyHelpItems("qrcodeContent", "codeVariable"),
+      };
+    case ElementType.LINE:
+      return {
+        title: t("properties.help.title.line"),
+        items: getPropertyHelpItems("lineStyle", "lineSize"),
+      };
+    case ElementType.RECT:
+    case ElementType.CIRCLE:
+      return {
+        title: t("properties.help.title.shape"),
+        items: getPropertyHelpItems("shapeStyle", "shapeSize"),
+      };
+    default:
+      return {
+        title: t("properties.help.title.none"),
+        items: getPropertyHelpItems("nonePanel"),
+      };
+  }
+});
+
+const propertyHelpKey = computed(() => {
+  if (isMultiSelected.value) return "multi";
+  if (!element.value) return "none";
+
+  return [
+    selectedElementId.value,
+    selectedElementType.value,
+    hasSelectedTableCells.value ? "selected-cells" : "element",
+  ].join(":");
+});
+
+watch(propertyHelpKey, () => {
+  if (showPropertyHelp.value) {
+    void updatePropertyHelpTooltipPosition();
+  }
 });
 
 const canSplitCells = computed(() => {
@@ -189,7 +341,7 @@ const i18nKeyPrefixes = [
   "editor.",
   "common.",
   "elements.",
-  "sidebar.",
+  "elementsPanel.",
   "help.",
   "preview.",
   "printDialog.",
@@ -404,6 +556,9 @@ const visibleSections = computed(() => {
 
 const getFieldValue = (field: PropertyField) => {
   if (!element.value) return field.defaultValue;
+  if (shouldApplyRowHeightToSelectedRows(field)) {
+    return store.getSelectedTableRowsHeight() ?? field.defaultValue;
+  }
   const target = field.target === "style" ? element.value.style : element.value;
   const value = (target as any)[field.key!];
   return value ?? field.defaultValue;
@@ -411,6 +566,10 @@ const getFieldValue = (field: PropertyField) => {
 
 const handleFieldChange = (field: PropertyField, value: any) => {
   if (!element.value) return;
+  if (shouldApplyRowHeightToSelectedRows(field)) {
+    store.updateSelectedTableRowsHeight(Number(value));
+    return;
+  }
   if (field.target === "style" && field.key) {
     handleStyleChange(field.key, value);
   } else if (field.target === "element" && field.key) {
@@ -544,6 +703,7 @@ const dispatchDesignerEvent = (name: string) => {
 };
 
 const closePropertiesPanel = () => {
+  showPropertyHelp.value = false;
   dispatchDesignerEvent("designer:close-properties-panel");
 };
 </script>
@@ -556,33 +716,101 @@ const closePropertiesPanel = () => {
   >
     <!-- Header -->
     <div
-      class="p-4 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between cursor-move select-none"
+      class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
       data-floating-panel-drag-handle="true"
     >
-      <div>
+      <div class="min-w-0">
         <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
           {{ t("properties.title") }}
         </h2>
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
           {{ t("properties.subtitle") }}
         </p>
-      </div>
-      <div class="flex items-center gap-2">
         <div
           v-if="isLocked"
-          class="flex items-center text-red-500 dark:text-red-400 gap-1 text-xs font-medium bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded border border-red-100 dark:border-red-800"
+          class="mt-2 inline-flex items-center text-red-500 dark:text-red-400 gap-1 text-xs font-medium bg-red-50 dark:bg-red-900/30 px-2 py-1 rounded border border-red-100 dark:border-red-800"
         >
           <Lock class="w-3 h-3" />
           <span>{{ t("properties.locked") }}</span>
         </div>
+      </div>
+      <div class="absolute right-0 top-0 z-50 flex items-center gap-0">
         <button
-          class="panel-close-btn p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-500 dark:text-gray-400"
+          ref="propertyHelpButtonRef"
+          type="button"
+          :class="[
+            'panel-help-btn h-8 w-8 inline-flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200',
+            showPropertyHelp
+              ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
+              : '',
+          ]"
+          :aria-label="
+            showPropertyHelp
+              ? t('properties.help.hide')
+              : t('properties.help.show')
+          "
+          :aria-pressed="showPropertyHelp"
+          @mousedown.stop.prevent="togglePropertyHelp"
+        >
+          <Help class="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          class="panel-close-btn h-8 w-8 inline-flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200"
+          @mousedown.stop
           @click.stop="closePropertiesPanel"
         >
           <Close class="w-4 h-4" />
         </button>
       </div>
     </div>
+
+    <Teleport :to="modalContainer || 'body'">
+      <div
+        v-if="showPropertyHelp"
+        :key="propertyHelpKey"
+        ref="propertyHelpTooltipRef"
+        role="tooltip"
+        class="pointer-events-auto select-text rounded border border-gray-200 bg-white text-left shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        :style="propertyHelpTooltipStyle"
+        @click.stop
+      >
+        <div
+          v-if="propertyHelpPlacement === 'bottom'"
+          class="absolute -top-1.5 h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+          :style="propertyHelpArrowStyle"
+        ></div>
+        <div
+          v-else
+          class="absolute -bottom-1.5 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+          :style="propertyHelpArrowStyle"
+        ></div>
+        <div
+          class="overflow-y-auto p-3"
+          :style="{ maxHeight: propertyHelpTooltipStyle.maxHeight }"
+        >
+          <div class="flex items-start gap-2">
+            <Help
+              class="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300"
+            />
+            <div class="min-w-0">
+              <h3
+                class="text-sm font-semibold text-gray-900 dark:text-gray-100"
+              >
+                {{ propertyHelpContent.title }}
+              </h3>
+              <ul
+                class="mt-2 list-disc space-y-1 pl-4 text-xs leading-5 text-gray-600 dark:text-gray-300"
+              >
+                <li v-for="item in propertyHelpContent.items" :key="item">
+                  {{ item }}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Multi-select Mode -->
     <div v-if="isMultiSelected" class="p-6 text-center">
@@ -941,7 +1169,11 @@ const closePropertiesPanel = () => {
 
         <!-- Style Tab: Generic Appearance -->
         <div
-          v-if="activeTab === 'style' && !isSelfStyled && element.type !== ElementType.TABLE"
+          v-if="
+            activeTab === 'style' &&
+            !isSelfStyled &&
+            element.type !== ElementType.TABLE
+          "
           class="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-800"
         >
           <h3
@@ -1051,7 +1283,7 @@ const closePropertiesPanel = () => {
     :initial-values="customElementInitialValues"
     :fields="customElementModalFields"
     :title="t('properties.action.saveCustomModal')"
-    :placeholder="t('sidebar.enterNamePlaceholder')"
+    :placeholder="t('elementsPanel.enterNamePlaceholder')"
     @close="showCustomElementModal = false"
     @save="onSaveCustomElement"
   />

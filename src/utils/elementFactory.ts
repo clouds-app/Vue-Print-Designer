@@ -221,6 +221,8 @@ export const elementConfigRegistry: Partial<
     tfootRepeat: true,
     autoPaginate: true,
     designOmitRows: true,
+    embeddedCellTextPosition: "overlap",
+    embeddedCellTextLayer: "below",
     repeatPerPage: false,
     footerData: [
       {

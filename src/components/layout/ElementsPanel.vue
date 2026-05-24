@@ -11,6 +11,7 @@ import { useI18n } from "vue-i18n";
 import { uiConfirm } from "@/utils/confirm";
 import { toast } from "@/utils/toast";
 import { useDesignerStore } from "@/stores/designer";
+import { useFloatingTooltip } from "@/composables/useFloatingTooltip";
 import Type from "~icons/material-symbols/text-fields";
 import Numbers from "~icons/material-symbols/numbers";
 import Image from "~icons/material-symbols/image";
@@ -28,6 +29,7 @@ import Palette from "~icons/material-symbols/palette";
 import Copy from "~icons/material-symbols/content-copy";
 import DataObject from "~icons/material-symbols/data-object";
 import Close from "~icons/material-symbols/close";
+import Help from "~icons/material-symbols/help";
 import {
   ElementType,
   type CustomElementTemplate,
@@ -50,7 +52,29 @@ const store = useDesignerStore();
 const modalContainer = inject("modal-container", ref<HTMLElement | null>(null));
 const designerInstanceId = inject<string | null>("designer-instance-id", null);
 const activeTab = ref<"standard" | "custom">("standard");
+const showElementsHelpTooltip = ref(false);
+const elementsHelpButtonRef = ref<HTMLElement | null>(null);
+const elementsHelpTooltipRef = ref<HTMLElement | null>(null);
 const customElements = computed(() => store.customElements);
+const elementsPanelHelp = computed(() => ({
+  title: t("elementsPanel.help.title"),
+  items: [
+    t("elementsPanel.help.items.standard"),
+    t("elementsPanel.help.items.custom"),
+    t("elementsPanel.help.items.variables"),
+  ],
+}));
+const {
+  arrowStyle: elementsHelpArrowStyle,
+  placement: elementsHelpPlacement,
+  toggleTooltip: toggleElementsHelpTooltip,
+  tooltipStyle: elementsHelpTooltipStyle,
+} = useFloatingTooltip(
+  showElementsHelpTooltip,
+  elementsHelpButtonRef,
+  elementsHelpTooltipRef,
+  { width: 288 },
+);
 
 const dispatchDesignerEvent = (name: string) => {
   const detail: Record<string, unknown> = {};
@@ -61,6 +85,7 @@ const dispatchDesignerEvent = (name: string) => {
 };
 
 const closeElementsPanel = () => {
+  showElementsHelpTooltip.value = false;
   dispatchDesignerEvent("designer:close-elements-panel");
 };
 
@@ -101,37 +126,45 @@ const resolveIconFromIconField = (icon: string | undefined) => {
 
 const categories = [
   {
-    title: "sidebar.general",
+    title: "elementsPanel.general",
     items: [
-      { type: ElementType.TEXT, label: "sidebar.text", icon: Type },
-      { type: ElementType.IMAGE, label: "sidebar.image", icon: Image },
+      { type: ElementType.TEXT, label: "elementsPanel.text", icon: Type },
+      { type: ElementType.IMAGE, label: "elementsPanel.image", icon: Image },
       {
         type: ElementType.PAGE_NUMBER,
-        label: "sidebar.pagination",
+        label: "elementsPanel.pagination",
         icon: Numbers,
       },
     ],
   },
   {
-    title: "sidebar.dataCodes",
+    title: "elementsPanel.dataCodes",
     items: [
-      { type: ElementType.TABLE, label: "sidebar.table", icon: Table },
-      { type: ElementType.BARCODE, label: "sidebar.barcode", icon: Barcode },
-      { type: ElementType.QRCODE, label: "sidebar.qrcode", icon: QrCode },
+      { type: ElementType.TABLE, label: "elementsPanel.table", icon: Table },
+      {
+        type: ElementType.BARCODE,
+        label: "elementsPanel.barcode",
+        icon: Barcode,
+      },
+      { type: ElementType.QRCODE, label: "elementsPanel.qrcode", icon: QrCode },
     ],
   },
   {
-    title: "sidebar.shapes",
+    title: "elementsPanel.shapes",
     items: [
-      { type: ElementType.LINE, label: "sidebar.line", icon: HorizontalRule },
+      {
+        type: ElementType.LINE,
+        label: "elementsPanel.line",
+        icon: HorizontalRule,
+      },
       {
         type: ElementType.RECT,
-        label: "sidebar.rect",
+        label: "elementsPanel.rect",
         icon: CheckBoxOutlineBlank,
       },
       {
         type: ElementType.CIRCLE,
-        label: "sidebar.circle",
+        label: "elementsPanel.circle",
         icon: RadioButtonUnchecked,
       },
     ],
@@ -351,7 +384,7 @@ const handleDelete = async (item: CustomElementTemplate) => {
   }
   activeMenuId.value = null;
   const confirmed = await uiConfirm.show(
-    t("sidebar.confirmDelete", { name: item.name }),
+    t("elementsPanel.confirmDelete", { name: item.name }),
   );
   if (confirmed) {
     await store.removeCustomElement(item.id);
@@ -377,7 +410,7 @@ const handleEditElement = async (item: CustomElementTemplate) => {
     const currentName = current ? current.name : "";
     if (
       !(await uiConfirm.show(
-        t("sidebar.confirmSwitchEdit", { name: currentName }),
+        t("elementsPanel.confirmSwitchEdit", { name: currentName }),
       ))
     ) {
       return;
@@ -407,7 +440,7 @@ const defaultCustomMenuItems = computed<CustomMenuItemView[]>(() => [
   {
     key: "editElement",
     actionKey: "editElement",
-    label: t("sidebar.editElement"),
+    label: t("elementsPanel.editElement"),
     iconComponent: Palette,
     disabled: ({ item }) => !canEditEntity(item),
   },
@@ -421,21 +454,21 @@ const defaultCustomMenuItems = computed<CustomMenuItemView[]>(() => [
   {
     key: "edit",
     actionKey: "edit",
-    label: t("sidebar.edit"),
+    label: t("elementsPanel.edit"),
     iconComponent: Edit,
     disabled: ({ item }) => !canEditEntity(item),
   },
   {
     key: "copy",
     actionKey: "copy",
-    label: t("sidebar.copy"),
+    label: t("elementsPanel.copy"),
     iconComponent: Copy,
     disabled: ({ item }) => !canCopyEntity(item),
   },
   {
     key: "delete",
     actionKey: "delete",
-    label: t("sidebar.delete"),
+    label: t("elementsPanel.delete"),
     iconComponent: Delete,
     danger: true,
     disabled: ({ item }) => !canDeleteEntity(item),
@@ -602,30 +635,91 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <aside
-    class="w-full bg-white dark:bg-gray-900 flex flex-col h-full z-40"
-  >
+  <aside class="w-full bg-white dark:bg-gray-900 flex flex-col h-full z-40">
     <div
-      class="p-4 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
+      class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
       data-floating-panel-drag-handle="true"
     >
-      <div class="flex items-start justify-between gap-2">
-        <div>
-          <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            {{ t("sidebar.elements") }}
-          </h2>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {{ t("sidebar.dragToCanvas") }}
-          </p>
-        </div>
+      <div class="min-w-0">
+        <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          {{ t("elementsPanel.elements") }}
+        </h2>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          {{ t("elementsPanel.dragToCanvas") }}
+        </p>
+      </div>
+      <div class="absolute right-0 top-0 z-50 flex items-center gap-0">
         <button
-          class="panel-close-btn p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-500 dark:text-gray-400"
+          ref="elementsHelpButtonRef"
+          type="button"
+          :class="[
+            'panel-help-btn h-8 w-8 inline-flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200',
+            showElementsHelpTooltip
+              ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
+              : '',
+          ]"
+          :aria-label="t('elementsPanel.help.title')"
+          :aria-pressed="showElementsHelpTooltip"
+          @mousedown.stop.prevent="toggleElementsHelpTooltip"
+        >
+          <Help class="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          class="panel-close-btn h-8 w-8 inline-flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200"
+          @mousedown.stop
           @click.stop="closeElementsPanel"
         >
           <Close class="w-4 h-4" />
         </button>
       </div>
     </div>
+
+    <Teleport :to="modalContainer || 'body'">
+      <div
+        v-if="showElementsHelpTooltip"
+        ref="elementsHelpTooltipRef"
+        role="tooltip"
+        class="pointer-events-auto select-text rounded border border-gray-200 bg-white text-left shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        :style="elementsHelpTooltipStyle"
+        @click.stop
+      >
+        <div
+          v-if="elementsHelpPlacement === 'bottom'"
+          class="absolute -top-1.5 h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+          :style="elementsHelpArrowStyle"
+        ></div>
+        <div
+          v-else
+          class="absolute -bottom-1.5 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+          :style="elementsHelpArrowStyle"
+        ></div>
+        <div
+          class="overflow-y-auto p-3"
+          :style="{ maxHeight: elementsHelpTooltipStyle.maxHeight }"
+        >
+          <div class="flex items-start gap-2">
+            <Help
+              class="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300"
+            />
+            <div class="min-w-0">
+              <h3
+                class="text-sm font-semibold text-gray-900 dark:text-gray-100"
+              >
+                {{ elementsPanelHelp.title }}
+              </h3>
+              <ul
+                class="mt-2 list-disc space-y-1 pl-4 text-xs leading-5 text-gray-600 dark:text-gray-300"
+              >
+                <li v-for="item in elementsPanelHelp.items" :key="item">
+                  {{ item }}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Tabs -->
     <div
@@ -640,7 +734,7 @@ onUnmounted(() => {
             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800',
         ]"
       >
-        {{ t("sidebar.standard") }}
+        {{ t("elementsPanel.standard") }}
         <div
           v-if="activeTab === 'standard'"
           class="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"
@@ -655,7 +749,7 @@ onUnmounted(() => {
             : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800',
         ]"
       >
-        {{ t("sidebar.custom") }}
+        {{ t("elementsPanel.custom") }}
         <div
           v-if="activeTab === 'custom'"
           class="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"
@@ -701,7 +795,7 @@ onUnmounted(() => {
       <template v-if="activeTab === 'custom'">
         <div v-if="customElements.length === 0" class="p-6 text-center">
           <p class="text-sm text-gray-500 dark:text-gray-400">
-            {{ t("sidebar.noCustomElements") }}
+            {{ t("elementsPanel.noCustomElements") }}
           </p>
         </div>
         <div v-else class="p-4 grid grid-cols-2 gap-3">
@@ -730,7 +824,7 @@ onUnmounted(() => {
                 'opacity-100 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300':
                   activeMenuId === item.id,
               }"
-              :title="t('sidebar.moreOptions')"
+              :title="t('elementsPanel.moreOptions')"
             >
               <MoreVert class="w-4 h-4" />
             </button>
@@ -803,10 +897,10 @@ onUnmounted(() => {
       :fields="editModalFields"
       :title="
         editModalMode === 'edit'
-          ? t('sidebar.editModalTitle')
+          ? t('elementsPanel.editModalTitle')
           : t('common.copy')
       "
-      :placeholder="t('sidebar.enterNamePlaceholder')"
+      :placeholder="t('elementsPanel.enterNamePlaceholder')"
       @close="showEditModal = false"
       @save="onEditSave"
     />

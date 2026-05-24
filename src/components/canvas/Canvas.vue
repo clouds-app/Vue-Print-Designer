@@ -6,6 +6,7 @@ import {
   onUnmounted,
   nextTick,
   inject,
+  type CSSProperties,
   type Ref,
 } from "vue";
 import { useI18n } from "vue-i18n";
@@ -259,6 +260,129 @@ const handleLineMouseUp = () => {
   window.removeEventListener("mouseup", handleLineMouseUp);
 };
 
+type HeaderFooterLineType = "header" | "footer";
+type HeaderFooterLineSpanMode = "value" | "percent";
+const DEFAULT_HEADER_FOOTER_LINE_COLOR = "#f87171";
+
+const normalizeHeaderFooterLineStyle = (
+  value: unknown,
+): "solid" | "dashed" | "dotted" => {
+  return value === "solid" || value === "dotted" ? value : "dashed";
+};
+
+const normalizeHeaderFooterLineSpanMode = (
+  value: unknown,
+): HeaderFooterLineSpanMode => {
+  return value === "percent" ? "percent" : "value";
+};
+
+const normalizeHeaderFooterLineSpan = (
+  value: unknown,
+  mode: HeaderFooterLineSpanMode,
+) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return mode === "percent" ? 100 : 100;
+  if (mode === "percent") {
+    return Math.min(100, Math.max(1, Number(numeric.toFixed(2))));
+  }
+  return Math.max(1, Math.round(numeric));
+};
+
+const getHeaderFooterLineWidth = (type: HeaderFooterLineType) => {
+  if (!store.enableHeaderFooterLineRendering) return 1;
+  const raw = type === "header" ? store.headerLineWidth : store.footerLineWidth;
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(1, Math.round(numeric));
+};
+
+const getHeaderFooterLineColor = (type: HeaderFooterLineType) => {
+  if (!store.enableHeaderFooterLineRendering) {
+    return DEFAULT_HEADER_FOOTER_LINE_COLOR;
+  }
+  const color =
+    type === "header" ? store.headerLineColor : store.footerLineColor;
+  return typeof color === "string" && color.trim()
+    ? color
+    : DEFAULT_HEADER_FOOTER_LINE_COLOR;
+};
+
+const getHeaderFooterLineStyle = (
+  type: HeaderFooterLineType,
+): "solid" | "dashed" | "dotted" => {
+  if (!store.enableHeaderFooterLineRendering) return "dashed";
+  const style =
+    type === "header" ? store.headerLineStyle : store.footerLineStyle;
+  return normalizeHeaderFooterLineStyle(style);
+};
+
+const getPrintableLineAvailableWidth = () => {
+  return Math.max(
+    1,
+    store.canvasSize.width - marginLeft.value - marginRight.value,
+  );
+};
+
+const getHeaderFooterLineSpanPixels = (type: HeaderFooterLineType) => {
+  const available = getPrintableLineAvailableWidth();
+  if (!store.enableHeaderFooterLineRendering) return available;
+
+  const mode = normalizeHeaderFooterLineSpanMode(
+    type === "header" ? store.headerLineSpanMode : store.footerLineSpanMode,
+  );
+  const rawSpan =
+    type === "header" ? store.headerLineSpan : store.footerLineSpan;
+  const span = normalizeHeaderFooterLineSpan(rawSpan, mode);
+
+  if (mode === "percent") {
+    return Math.max(1, Math.min(available, (available * span) / 100));
+  }
+  return Math.max(1, Math.min(available, span));
+};
+
+const shouldIncludeHeaderFooterLineInPrint = computed(() => {
+  return Boolean(store.enableHeaderFooterLineRendering);
+});
+
+const getHeaderFooterLineHitArea = (type: HeaderFooterLineType) => {
+  const lineWidth = getHeaderFooterLineWidth(type);
+  return Math.max(12, lineWidth + 10);
+};
+
+const headerLineStrokeStyle = computed<CSSProperties>(() => ({
+  borderTopWidth: `${getHeaderFooterLineWidth("header")}px`,
+  borderTopStyle: getHeaderFooterLineStyle("header"),
+  borderTopColor: getHeaderFooterLineColor("header"),
+  width: `${getHeaderFooterLineSpanPixels("header")}px`,
+  marginLeft: "auto",
+  marginRight: "auto",
+}));
+
+const footerLineStrokeStyle = computed<CSSProperties>(() => ({
+  borderTopWidth: `${getHeaderFooterLineWidth("footer")}px`,
+  borderTopStyle: getHeaderFooterLineStyle("footer"),
+  borderTopColor: getHeaderFooterLineColor("footer"),
+  width: `${getHeaderFooterLineSpanPixels("footer")}px`,
+  marginLeft: "auto",
+  marginRight: "auto",
+}));
+
+const headerLineHitAreaStyle = computed(() => {
+  const hitArea = getHeaderFooterLineHitArea("header");
+  return {
+    height: `${hitArea}px`,
+    marginTop: `${-hitArea / 2}px`,
+  };
+});
+
+const footerLineHitAreaStyle = computed(() => {
+  const hitArea = getHeaderFooterLineHitArea("footer");
+  return {
+    height: `${hitArea}px`,
+    marginBottom: `${-hitArea / 2}px`,
+  };
+});
+
 onUnmounted(() => {
   window.removeEventListener("mousemove", handleLineMouseMove);
   window.removeEventListener("mouseup", handleLineMouseUp);
@@ -426,6 +550,16 @@ const DIRECT_VARIABLE_BINDING_TYPES = new Set<ElementType>([
 ]);
 
 type VariableDropTargetKind = "text" | "directVariable" | "table";
+type TableCellDropTarget = {
+  rowIndex: number;
+  colField: string;
+  section: "body" | "footer";
+};
+type VariableDropTarget = {
+  element: PrintElement;
+  kind: VariableDropTargetKind | "tableCell";
+  tableCell?: TableCellDropTarget;
+};
 type TableVariableBindingKey =
   | "variable"
   | "columnsVariable"
@@ -442,6 +576,7 @@ const TABLE_VARIABLE_BINDING_KEYS: TableVariableBindingKey[] = [
 const variableDropHover = ref<{
   pageIndex: number;
   elementId: string;
+  tableCell?: TableCellDropTarget;
 } | null>(null);
 
 const showTableVariableTargetModal = ref(false);
@@ -523,8 +658,100 @@ const isVariableDragPayload = (
 ): payload is DragPayload => {
   return Boolean(
     payload &&
-      (payload.variable !== undefined || payload.dataVariable !== undefined),
+    (payload.variable !== undefined || payload.dataVariable !== undefined),
   );
+};
+
+const normalizeTableCellSection = (section?: string): "body" | "footer" => {
+  return section === "footer" ? "footer" : "body";
+};
+
+const getSelectedTableCellDropTarget = (
+  tableElementId: string,
+): TableCellDropTarget | null => {
+  const selection = store.tableSelection;
+  if (
+    !selection ||
+    selection.elementId !== tableElementId ||
+    selection.cells.length !== 1
+  ) {
+    return null;
+  }
+
+  const selectedCell = selection.cells[0];
+  return {
+    rowIndex: selectedCell.rowIndex,
+    colField: selectedCell.colField,
+    section: selectedCell.section || "body",
+  };
+};
+
+const resolveTableCellDropTarget = (
+  event: DragEvent,
+  tableElementId: string,
+): TableCellDropTarget | null => {
+  const path =
+    typeof event.composedPath === "function" ? event.composedPath() : [];
+
+  for (const node of path) {
+    if (!(node instanceof HTMLElement)) continue;
+    if (node.tagName !== "TD") continue;
+
+    const colField = node.dataset.field;
+    const rowIndexRaw = node.dataset.rowIndex;
+    if (!colField || rowIndexRaw === undefined) continue;
+
+    const rowIndex = Number.parseInt(rowIndexRaw, 10);
+    if (!Number.isFinite(rowIndex)) continue;
+
+    const wrapper = node.closest(".element-wrapper[data-element-id]");
+    if (
+      !wrapper ||
+      wrapper.getAttribute("data-element-id") !== tableElementId
+    ) {
+      continue;
+    }
+
+    return {
+      rowIndex,
+      colField,
+      section: normalizeTableCellSection(node.dataset.section),
+    };
+  }
+
+  const queryRoot = getQueryRoot();
+  const tableWrapper = queryRoot.querySelector(
+    `.element-wrapper[data-element-id="${tableElementId}"]`,
+  ) as HTMLElement | null;
+  if (!tableWrapper) return null;
+
+  const candidateCells = tableWrapper.querySelectorAll<HTMLElement>(
+    "td[data-field][data-row-index][data-section]",
+  );
+  for (const cellEl of Array.from(candidateCells)) {
+    const cellRect = cellEl.getBoundingClientRect();
+    if (
+      event.clientX >= cellRect.left &&
+      event.clientX <= cellRect.right &&
+      event.clientY >= cellRect.top &&
+      event.clientY <= cellRect.bottom
+    ) {
+      const colField = cellEl.dataset.field;
+      const rowIndexRaw = cellEl.dataset.rowIndex;
+      if (!colField || rowIndexRaw === undefined) continue;
+
+      const rowIndex = Number.parseInt(rowIndexRaw, 10);
+      if (!Number.isFinite(rowIndex)) continue;
+
+      return {
+        rowIndex,
+        colField,
+        section: normalizeTableCellSection(cellEl.dataset.section),
+      };
+    }
+  }
+
+  return null;
 };
 
 const resolveVariableDropTarget = (
@@ -532,7 +759,8 @@ const resolveVariableDropTarget = (
   x: number,
   y: number,
   payload: DragPayload,
-): { element: PrintElement; kind: VariableDropTargetKind } | null => {
+  event?: DragEvent,
+): VariableDropTarget | null => {
   const hasVariablePayload =
     payload.variable !== undefined || payload.dataVariable !== undefined;
   if (!hasVariablePayload) return null;
@@ -552,6 +780,18 @@ const resolveVariableDropTarget = (
     if (!isPointInside) continue;
 
     if (element.type === ElementType.TABLE) {
+      const tableCellTarget = event
+        ? resolveTableCellDropTarget(event, element.id)
+        : null;
+      if (tableCellTarget) {
+        return { element, kind: "tableCell", tableCell: tableCellTarget };
+      }
+
+      const selectedCellTarget = getSelectedTableCellDropTarget(element.id);
+      if (selectedCellTarget) {
+        return { element, kind: "tableCell", tableCell: selectedCellTarget };
+      }
+
       return { element, kind: "table" };
     }
 
@@ -586,6 +826,19 @@ const isVariableDropHovered = (elementId: string, pageIndex: number) => {
   return Boolean(
     hover && hover.elementId === elementId && hover.pageIndex === pageIndex,
   );
+};
+
+const getVariableDropHoverTableCell = (
+  elementId: string,
+  pageIndex: number,
+) => {
+  const hover = variableDropHover.value;
+  if (!hover) return null;
+  if (hover.elementId !== elementId || hover.pageIndex !== pageIndex) {
+    return null;
+  }
+
+  return hover.tableCell || null;
 };
 
 const getSuggestedTableVariableTarget = (
@@ -633,12 +886,9 @@ const handleTableVariableTargetSave = (payload: Record<string, any>) => {
     return;
   }
 
-  store.updateElement(
-    pending.elementId,
-    {
-      [target]: pending.atVariable,
-    } as Partial<PrintElement>,
-  );
+  store.updateElement(pending.elementId, {
+    [target]: pending.atVariable,
+  } as Partial<PrintElement>);
 
   closeTableVariableTargetModal();
 };
@@ -664,6 +914,55 @@ const replaceDroppedVariableInContent = (
   }
 
   return `${baseContent}${nextVariable}`;
+};
+
+const applyDroppedVariableToTableCell = (
+  element: PrintElement,
+  tableCell: TableCellDropTarget,
+  atVariable: string,
+) => {
+  const targetDataKey = tableCell.section === "footer" ? "footerData" : "data";
+  const rawData = (element as any)[targetDataKey];
+  const nextData = Array.isArray(rawData)
+    ? JSON.parse(JSON.stringify(rawData))
+    : [];
+
+  while (nextData.length <= tableCell.rowIndex) {
+    nextData.push({});
+  }
+
+  if (
+    !nextData[tableCell.rowIndex] ||
+    typeof nextData[tableCell.rowIndex] !== "object"
+  ) {
+    nextData[tableCell.rowIndex] = {};
+  }
+
+  const row = nextData[tableCell.rowIndex] as Record<string, any>;
+  const currentValue = row[tableCell.colField];
+
+  if (currentValue && typeof currentValue === "object") {
+    row[tableCell.colField] = {
+      ...currentValue,
+      value: replaceDroppedVariableInContent(
+        currentValue.value,
+        undefined,
+        atVariable,
+      ),
+    };
+  } else {
+    row[tableCell.colField] = replaceDroppedVariableInContent(
+      currentValue !== undefined && currentValue !== null
+        ? String(currentValue)
+        : "",
+      undefined,
+      atVariable,
+    );
+  }
+
+  store.updateElement(element.id, {
+    [targetDataKey]: nextData,
+  } as Partial<PrintElement>);
 };
 
 const handleDrop = (event: DragEvent, pageIndex: number) => {
@@ -693,7 +992,13 @@ const handleDrop = (event: DragEvent, pageIndex: number) => {
 
   // Handle dropping a variable directly to canvas
   if (variable || dataVariable) {
-    const target = resolveVariableDropTarget(pageIndex, x, y, parsedPayload);
+    const target = resolveVariableDropTarget(
+      pageIndex,
+      x,
+      y,
+      parsedPayload,
+      event,
+    );
     if (target) {
       const droppedVariable = variable || dataVariable;
       const atVariable = toAtVariable(droppedVariable || "");
@@ -716,6 +1021,15 @@ const handleDrop = (event: DragEvent, pageIndex: number) => {
         store.updateElement(target.element.id, {
           variable: atVariable,
         });
+        return;
+      }
+
+      if (target.kind === "tableCell" && target.tableCell) {
+        applyDroppedVariableToTableCell(
+          target.element,
+          target.tableCell,
+          atVariable,
+        );
         return;
       }
 
@@ -756,11 +1070,12 @@ const handleDragOver = (event: DragEvent, pageIndex: number) => {
   const x = (event.clientX - rect.left) / store.zoom;
   const y = (event.clientY - rect.top) / store.zoom;
 
-  const target = resolveVariableDropTarget(pageIndex, x, y, payload);
+  const target = resolveVariableDropTarget(pageIndex, x, y, payload, event);
   if (target) {
     variableDropHover.value = {
       pageIndex,
       elementId: target.element.id,
+      tableCell: target.kind === "tableCell" ? target.tableCell : undefined,
     };
   } else if (variableDropHover.value?.pageIndex === pageIndex) {
     clearVariableDropHover();
@@ -931,9 +1246,9 @@ const getGlobalElements = () => {
     store.canvasSize.height - (store.footerHeight + marginBottom);
 
   return getRenderableElements(firstPage.elements).filter((el) => {
-    if (el.type === ElementType.TABLE) return false;
     const bounds = store.getElementBoundsAtPosition(el, el.x, el.y);
-    const isRepeatPerPage = el.repeatPerPage === true;
+    const isRepeatPerPage =
+      el.type !== ElementType.TABLE && el.repeatPerPage === true;
     const isHeader = store.showHeaderLine && bounds.maxY <= headerBoundary;
     const isFooter = store.showFooterLine && bounds.minY >= footerBoundary;
     return isRepeatPerPage || isHeader || isFooter;
@@ -1032,7 +1347,10 @@ const getGlobalElements = () => {
         <!-- Header & Footer Lines -->
         <template v-if="store.showHeaderLine">
           <div
-            data-print-exclude="true"
+            data-print-line-role="header"
+            :data-print-exclude="
+              shouldIncludeHeaderFooterLineInPrint ? undefined : 'true'
+            "
             class="absolute left-0 w-full z-20 group flex flex-col justify-center items-center"
             :class="
               index === 0 && isTemplateEditable
@@ -1043,24 +1361,14 @@ const getGlobalElements = () => {
               top: `${store.headerHeight + marginTop}px`,
               left: `${marginLeft}px`,
               width: `${store.canvasSize.width - marginLeft - marginRight}px`,
-              height: '12px',
-              marginTop: '-6px',
+              ...headerLineHitAreaStyle,
             }"
             @mousedown="(e) => index === 0 && handleLineMouseDown(e, 'header')"
           >
-            <div
-              class="w-full h-px"
-              :style="{
-                backgroundImage:
-                  index === 0
-                    ? 'linear-gradient(to right, #f87171 60%, transparent 40%)'
-                    : 'linear-gradient(to right, #d1d5db 60%, transparent 40%)',
-                backgroundSize: '20px 1px',
-                backgroundRepeat: 'repeat-x',
-              }"
-            ></div>
+            <div class="border-t" :style="headerLineStrokeStyle"></div>
             <div
               class="absolute right-0 -top-4 text-xs bg-white/80 px-1 pointer-events-none"
+              data-print-exclude="true"
               :class="index === 0 ? 'text-red-400' : 'text-gray-400'"
             >
               {{ t("canvas.headerLabel") }}
@@ -1070,7 +1378,10 @@ const getGlobalElements = () => {
 
         <template v-if="store.showFooterLine">
           <div
-            data-print-exclude="true"
+            data-print-line-role="footer"
+            :data-print-exclude="
+              shouldIncludeHeaderFooterLineInPrint ? undefined : 'true'
+            "
             class="absolute left-0 w-full z-20 group flex flex-col justify-center items-center"
             :class="
               index === 0 && isTemplateEditable
@@ -1081,24 +1392,14 @@ const getGlobalElements = () => {
               bottom: `${store.footerHeight + marginBottom}px`,
               left: `${marginLeft}px`,
               width: `${store.canvasSize.width - marginLeft - marginRight}px`,
-              height: '12px',
-              marginBottom: '-6px',
+              ...footerLineHitAreaStyle,
             }"
             @mousedown="(e) => index === 0 && handleLineMouseDown(e, 'footer')"
           >
-            <div
-              class="w-full h-px"
-              :style="{
-                backgroundImage:
-                  index === 0
-                    ? 'linear-gradient(to right, #f87171 60%, transparent 40%)'
-                    : 'linear-gradient(to right, #d1d5db 60%, transparent 40%)',
-                backgroundSize: '20px 1px',
-                backgroundRepeat: 'repeat-x',
-              }"
-            ></div>
+            <div class="border-t" :style="footerLineStrokeStyle"></div>
             <div
               class="absolute right-0 -bottom-4 text-xs bg-white/80 px-1 pointer-events-none"
+              data-print-exclude="true"
               :class="index === 0 ? 'text-red-400' : 'text-gray-400'"
             >
               {{ t("canvas.footerLabel") }}
@@ -1139,13 +1440,25 @@ const getGlobalElements = () => {
           :page-index="index"
           :clip-to-page-bounds="shouldClipElementToPage(index, element.id)"
           :read-only="!isTemplateEditable || isHandPanActive"
-          :force-hover="!isHandPanActive && isVariableDropHovered(element.id, index)"
+          :force-hover="
+            !isHandPanActive && isVariableDropHovered(element.id, index)
+          "
         >
           <component
             :is="getComponent(element.type)"
             :element="element"
             :page-index="index"
             :total-pages="pages.length"
+            v-bind="
+              element.type === ElementType.TABLE
+                ? {
+                    variableDropHoverCell: getVariableDropHoverTableCell(
+                      element.id,
+                      index,
+                    ),
+                  }
+                : {}
+            "
           />
         </ElementWrapper>
 

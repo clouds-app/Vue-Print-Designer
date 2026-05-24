@@ -12,7 +12,7 @@ import { useI18n } from "vue-i18n";
 import { useDesignerStore } from "@/stores/designer";
 import { useTemplateStore } from "@/stores/templates";
 import { formatShortcut } from "@/utils/os";
-import type { PrintElement } from "@/types";
+import { createNewElement } from "@/utils/elementFactory";
 import DeleteIcon from "~icons/material-symbols/delete";
 import CutIcon from "~icons/material-symbols/content-cut";
 import CopyIcon from "~icons/material-symbols/content-copy"; // Reverted icon name
@@ -27,6 +27,10 @@ import MoveUpIcon from "~icons/material-symbols/arrow-upward";
 import MoveDownIcon from "~icons/material-symbols/arrow-downward";
 import CellMerge from "~icons/material-symbols/cell-merge";
 import GridViewOutline from "~icons/material-symbols/grid-view-outline";
+import ChevronRightIcon from "~icons/material-symbols/chevron-right";
+import ImageIcon from "~icons/material-symbols/image";
+import QrCodeIcon from "~icons/material-symbols/qr-code";
+import BarcodeIcon from "~icons/material-symbols/barcode";
 import { ElementType } from "@/types";
 
 const { t } = useI18n();
@@ -65,7 +69,9 @@ const selectedTableSelectionElement = computed(() => {
   if (!selection) return null;
 
   for (const page of store.pages) {
-    const element = page.elements.find((item) => item.id === selection.elementId);
+    const element = page.elements.find(
+      (item) => item.id === selection.elementId,
+    );
     if (element?.type === ElementType.TABLE) return element;
   }
 
@@ -104,6 +110,147 @@ const canSplitSelectedTableCell = computed(() => {
 const showTableCellActions = computed(() => {
   return !!store.tableSelection && !!selectedTableSelectionElement.value;
 });
+
+type InsertableElementType =
+  | ElementType.IMAGE
+  | ElementType.QRCODE
+  | ElementType.BARCODE;
+
+const canInsertIntoSelectedTableCell = computed(() => {
+  const selection = store.tableSelection;
+  const element = selectedTableSelectionElement.value;
+  if (!store.isTemplateEditable || !selection || !element || element.locked) {
+    return false;
+  }
+
+  return selection.cells.length === 1;
+});
+
+type SelectedTableCellGeometry = {
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  tableZIndex: number;
+};
+
+const getSelectedTableCellGeometry = (): SelectedTableCellGeometry | null => {
+  const selection = store.tableSelection;
+  const tableElement = selectedTableSelectionElement.value;
+  if (!selection || !tableElement || selection.cells.length !== 1) {
+    return null;
+  }
+
+  const targetCell = selection.cells[0];
+  const targetSection = targetCell.section || "body";
+
+  const tableWrapper = getQueryRoot().querySelector(
+    `.element-wrapper[data-element-id="${tableElement.id}"]`,
+  ) as HTMLElement | null;
+  if (!tableWrapper) return null;
+
+  const candidateCells = tableWrapper.querySelectorAll<HTMLElement>(
+    "td[data-field][data-row-index][data-section]",
+  );
+
+  let matchedCell: HTMLElement | null = null;
+  for (const cellEl of candidateCells) {
+    if (
+      cellEl.dataset.field === targetCell.colField &&
+      cellEl.dataset.rowIndex === String(targetCell.rowIndex) &&
+      (cellEl.dataset.section || "body") === targetSection
+    ) {
+      matchedCell = cellEl;
+      break;
+    }
+  }
+
+  if (!matchedCell) return null;
+
+  const wrapperRect = tableWrapper.getBoundingClientRect();
+  const cellRect = matchedCell.getBoundingClientRect();
+  const zoom = store.zoom || 1;
+  const localX = (cellRect.left - wrapperRect.left) / zoom;
+  const localY = (cellRect.top - wrapperRect.top) / zoom;
+  const cellWidth = cellRect.width / zoom;
+  const cellHeight = cellRect.height / zoom;
+
+  let pageIndex = store.pages.findIndex((page) =>
+    page.elements.some((item) => item.id === tableElement.id),
+  );
+  if (pageIndex < 0) pageIndex = store.currentPageIndex;
+
+  const tableZ = Number(tableElement.style?.zIndex ?? 1);
+  const tableZIndex = Number.isFinite(tableZ) ? tableZ : 1;
+
+  return {
+    pageIndex,
+    x: tableElement.x + localX,
+    y: tableElement.y + localY,
+    width: Math.max(1, cellWidth),
+    height: Math.max(1, cellHeight),
+    tableZIndex,
+  };
+};
+
+const insertStandardElementIntoSelectedTableCell = (
+  type: InsertableElementType,
+) => {
+  if (!canInsertIntoSelectedTableCell.value) return;
+
+  const selection = store.tableSelection;
+  const tableElement = selectedTableSelectionElement.value;
+  if (!selection || !tableElement || selection.cells.length !== 1) return;
+  const selectedCell = selection.cells[0];
+
+  const geometry = getSelectedTableCellGeometry();
+  if (!geometry) return;
+
+  const cellPadding = 4;
+  const availableWidth = Math.max(24, geometry.width - cellPadding * 2);
+  const availableHeight = Math.max(24, geometry.height - cellPadding * 2);
+
+  const newElement = createNewElement(
+    type,
+    geometry.x + cellPadding,
+    geometry.y + cellPadding,
+    t,
+  );
+
+  if (type === ElementType.QRCODE) {
+    const side = Math.max(24, Math.min(availableWidth, availableHeight));
+    newElement.width = side;
+    newElement.height = side;
+    newElement.x = geometry.x + (geometry.width - side) / 2;
+    newElement.y = geometry.y + (geometry.height - side) / 2;
+  } else if (type === ElementType.BARCODE) {
+    const barcodeHeight = Math.max(24, Math.min(availableHeight, 80));
+    newElement.width = availableWidth;
+    newElement.height = barcodeHeight;
+    newElement.x = geometry.x + (geometry.width - availableWidth) / 2;
+    newElement.y = geometry.y + (geometry.height - barcodeHeight) / 2;
+  } else {
+    newElement.width = availableWidth;
+    newElement.height = availableHeight;
+    newElement.x = geometry.x + (geometry.width - availableWidth) / 2;
+    newElement.y = geometry.y + (geometry.height - availableHeight) / 2;
+  }
+
+  newElement.style = {
+    ...newElement.style,
+    zIndex: Math.max(1, geometry.tableZIndex + 1),
+  };
+  newElement.embeddedInTableId = tableElement.id;
+  newElement.embeddedInTableCell = {
+    rowIndex: selectedCell.rowIndex,
+    colField: selectedCell.colField,
+    section: selectedCell.section || "body",
+  };
+
+  store.addElement(newElement, geometry.pageIndex);
+  showMenu.value = false;
+};
 
 const handleLayerMove = (mode: "front" | "back" | "forward" | "backward") => {
   const ids = [...store.selectedElementIds];
@@ -214,7 +361,15 @@ const getPasteTarget = (clientX: number, clientY: number) => {
 const handleKeydown = (e: KeyboardEvent) => {
   // If global shortcuts are disabled (e.g. modal open), ignore
   if (store.disableGlobalShortcuts) return;
-  if (!isShortcutEventForCurrentDesigner(e)) return;
+  const isDeleteKey = e.key === "Delete" || e.key === "Del";
+  const isCurrentDesignerEvent = isShortcutEventForCurrentDesigner(e);
+  if (!isCurrentDesignerEvent) {
+    // Fallback: when a guide is already selected, allow Delete even if
+    // composedPath/target cannot be resolved back to the designer root.
+    if (!(isDeleteKey && !!store.selectedGuideId)) {
+      return;
+    }
+  }
 
   // New Template (Ctrl + Alt + N) - Trigger UI flow via event
   if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "n") {
@@ -281,7 +436,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 
   // Delete
-  if (e.key === "Delete") {
+  if (isDeleteKey) {
     if (store.selectedElementIds.length > 1) {
       e.preventDefault();
       store.removeSelectedElements();
@@ -607,6 +762,57 @@ onUnmounted(() => {
           }}</span>
         </button>
         <template v-if="showTableCellActions">
+          <div class="relative group">
+            <button
+              class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:text-gray-400 flex items-center gap-2"
+              :disabled="!canInsertIntoSelectedTableCell"
+            >
+              <ImageIcon class="w-4 h-4" />
+              <span class="flex-1">{{ t("editor.insertMenu") }}</span>
+              <ChevronRightIcon class="w-4 h-4 text-gray-400" />
+            </button>
+            <div
+              v-if="canInsertIntoSelectedTableCell"
+              class="absolute left-full top-0 z-10 ml-1 hidden min-w-[140px] rounded-md border border-gray-200 bg-white py-1 shadow-xl group-hover:block"
+            >
+              <button
+                class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
+                @click="
+                  () =>
+                    insertStandardElementIntoSelectedTableCell(
+                      ElementType.IMAGE,
+                    )
+                "
+              >
+                <ImageIcon class="w-4 h-4" />
+                <span class="flex-1">{{ t("elementsPanel.image") }}</span>
+              </button>
+              <button
+                class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
+                @click="
+                  () =>
+                    insertStandardElementIntoSelectedTableCell(
+                      ElementType.QRCODE,
+                    )
+                "
+              >
+                <QrCodeIcon class="w-4 h-4" />
+                <span class="flex-1">{{ t("elementsPanel.qrcode") }}</span>
+              </button>
+              <button
+                class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
+                @click="
+                  () =>
+                    insertStandardElementIntoSelectedTableCell(
+                      ElementType.BARCODE,
+                    )
+                "
+              >
+                <BarcodeIcon class="w-4 h-4" />
+                <span class="flex-1">{{ t("elementsPanel.barcode") }}</span>
+              </button>
+            </div>
+          </div>
           <button
             class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:text-gray-400 flex items-center gap-2"
             :disabled="!canMergeSelectedTableCells"
