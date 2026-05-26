@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useDesignerStore } from "@/stores/designer";
 import { useTemplateStore } from "@/stores/templates";
 import { toast } from "@/utils/toast";
+import { canEditEntity } from "@/utils/entityConstraints";
 
 export interface UseJsonBlobModalOptions {
   getPages: () => HTMLElement[] | null | undefined;
@@ -34,8 +35,22 @@ export const useJsonBlobModal = (options: UseJsonBlobModalOptions) => {
   const modalTitle = ref("");
   const modalLanguage = ref("json");
 
+  const currentTemplate = computed(() => {
+    return templateStore.templates.find(
+      (item) => item.id === templateStore.currentTemplateId,
+    );
+  });
+
+  const canEditCurrentTemplate = computed(() => {
+    if (!currentTemplate.value) return true;
+    return canEditEntity(currentTemplate.value);
+  });
+
   const canSaveJson = computed(
-    () => store.showDeveloperMode && modalLanguage.value === "json",
+    () =>
+      store.showDeveloperMode &&
+      modalLanguage.value === "json" &&
+      canEditCurrentTemplate.value,
   );
 
   const openModal = (content: string, title: string, language: string) => {
@@ -108,6 +123,11 @@ export const useJsonBlobModal = (options: UseJsonBlobModalOptions) => {
 
   const handleSaveJson = async () => {
     if (!canSaveJson.value) return;
+
+    if (!canEditCurrentTemplate.value) {
+      toast.warning(t("toast.templateReadOnly"));
+      return;
+    }
 
     let parsed: Record<string, any> | null = null;
     try {
