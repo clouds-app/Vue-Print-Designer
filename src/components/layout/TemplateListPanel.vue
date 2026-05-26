@@ -17,6 +17,7 @@ import type {
   ListContextMenuItem,
   TemplateModalConfigItem,
   TemplateModalField,
+  TemplateListTag,
   TemplateModalFormConfig,
   TemplateMenuActionKey,
   VariableTreeItem,
@@ -66,6 +67,7 @@ type TemplateMenuItemView = ListContextMenuItem & { iconComponent?: Component };
 type ModalSavePayload = string | Record<string, any>;
 const VARIABLE_DRAG_MIME = "application/x-print-designer-variable";
 const DATA_VARIABLE_DRAG_MIME = "application/x-print-designer-data-variable";
+const maxVisibleTemplateTags = 2;
 
 const isEventForCurrentDesigner = (e: Event) => {
   const eventId = (e as CustomEvent)?.detail?.__designerInstanceId;
@@ -182,6 +184,121 @@ const normalizeSearchValue = (value: string | undefined) =>
   String(value || "")
     .trim()
     .toLowerCase();
+
+const normalizeTagColor = (rawColor: string | undefined) => {
+  const color = (rawColor || "").trim().toLowerCase();
+  if (
+    color === "red" ||
+    color === "#ff4d4f" ||
+    color === "红色" ||
+    color === "红"
+  ) {
+    return {
+      backgroundColor: "#fef2f2",
+      color: "#dc2626",
+      borderColor: "#fecaca",
+    };
+  }
+  if (
+    color === "white" ||
+    color === "#ffffff" ||
+    color === "白色" ||
+    color === "白"
+  ) {
+    return {
+      backgroundColor: "#ffffff",
+      color: "#374151",
+      borderColor: "#d1d5db",
+    };
+  }
+  if (
+    color === "blue" ||
+    color === "#3b82f6" ||
+    color === "蓝色" ||
+    color === "蓝"
+  ) {
+    return {
+      backgroundColor: "#eff6ff",
+      color: "#1d4ed8",
+      borderColor: "#bfdbfe",
+    };
+  }
+  if (
+    color === "green" ||
+    color === "#22c55e" ||
+    color === "绿色" ||
+    color === "绿"
+  ) {
+    return {
+      backgroundColor: "#f0fdf4",
+      color: "#15803d",
+      borderColor: "#bbf7d0",
+    };
+  }
+  if (
+    color === "orange" ||
+    color === "#f97316" ||
+    color === "橙色" ||
+    color === "橙"
+  ) {
+    return {
+      backgroundColor: "#fff7ed",
+      color: "#c2410c",
+      borderColor: "#fed7aa",
+    };
+  }
+  if (color) {
+    return { backgroundColor: color, color: "#ffffff", borderColor: color };
+  }
+  return {
+    backgroundColor: "#f3f4f6",
+    color: "#4b5563",
+    borderColor: "#e5e7eb",
+  };
+};
+
+const getTemplateTags = (template: Template): TemplateListTag[] => {
+  const tags = template.ext?.templateTags;
+  if (!Array.isArray(tags)) return [];
+
+  return tags
+    .map((tag): TemplateListTag | null => {
+      if (!tag || typeof tag !== "object") return null;
+      const label = String(tag.label ?? "").trim();
+      if (!label) return null;
+
+      return {
+        key: tag.key ? String(tag.key) : undefined,
+        label,
+        color: tag.color ? String(tag.color) : undefined,
+      };
+    })
+    .filter((tag): tag is TemplateListTag => tag !== null);
+};
+
+const templateTagDisplayMap = computed(() => {
+  const map: Record<string, { visible: TemplateListTag[]; overflow: number }> =
+    {};
+  templateStore.templates.forEach((template) => {
+    const tags = getTemplateTags(template);
+    map[template.id] = {
+      visible: tags.slice(0, maxVisibleTemplateTags),
+      overflow:
+        tags.length > maxVisibleTemplateTags
+          ? tags.length - maxVisibleTemplateTags
+          : 0,
+    };
+  });
+  return map;
+});
+
+const getVisibleTemplateTags = (template: Template) => {
+  return templateTagDisplayMap.value[template.id]?.visible || [];
+};
+
+const getTemplateTagOverflow = (template: Template) => {
+  return templateTagDisplayMap.value[template.id]?.overflow || 0;
+};
 
 const normalizedSearchQuery = computed(() =>
   normalizeSearchValue(searchQuery.value),
@@ -771,27 +888,43 @@ onUnmounted(() => {
         <div
           v-for="item in filteredTemplates"
           :key="item.id"
-          class="relative group border-b border-gray-100 dark:border-gray-700 last:border-b-0 flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+          class="relative group border-b border-gray-100 dark:border-gray-700 last:border-b-0 flex items-center px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
           :title="item.name"
           @click="selectTemplate(item)"
           @contextmenu.prevent="openRowMenuByContext($event, item.id)"
         >
-          <span class="w-2 h-2 flex items-center justify-center flex-shrink-0">
+          <div class="flex items-center gap-2 overflow-hidden flex-1 min-w-0">
+            <span class="w-2 h-2 flex items-center justify-center flex-shrink-0">
+              <span
+                v-if="templateStore.currentTemplateId === item.id"
+                class="w-1.5 h-1.5 rounded-full bg-blue-500"
+              ></span>
+            </span>
             <span
-              v-if="templateStore.currentTemplateId === item.id"
-              class="w-1.5 h-1.5 rounded-full bg-blue-500"
-            ></span>
-          </span>
-          <span
-            class="text-sm truncate flex-1"
-            :class="
-              templateStore.currentTemplateId === item.id
-                ? 'font-medium text-blue-600 dark:text-blue-400'
-                : 'text-gray-700 dark:text-gray-200'
-            "
-          >
-            {{ item.name }}
-          </span>
+              v-for="tag in getVisibleTemplateTags(item)"
+              :key="`${item.id}-${tag.label}-${tag.color || ''}`"
+              class="inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] leading-none flex-shrink-0"
+              :style="normalizeTagColor(tag.color)"
+            >
+              {{ tag.label }}
+            </span>
+            <span
+              v-if="getTemplateTagOverflow(item) > 0"
+              class="inline-flex items-center px-1.5 py-0.5 rounded border text-[10px] leading-none flex-shrink-0 bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600"
+            >
+              +{{ getTemplateTagOverflow(item) }}
+            </span>
+            <span
+              class="text-sm truncate flex-1 min-w-0"
+              :class="
+                templateStore.currentTemplateId === item.id
+                  ? 'font-medium text-blue-600 dark:text-blue-400'
+                  : 'text-gray-700 dark:text-gray-200'
+              "
+            >
+              {{ item.name }}
+            </span>
+          </div>
           <button
             type="button"
             class="row-menu-trigger p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
