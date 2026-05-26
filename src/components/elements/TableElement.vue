@@ -2114,6 +2114,7 @@ export const elementPropertiesSchema: ElementPropertiesSchema = {
       </table>
       <div
         v-if="shouldRenderExportTableRightEdge"
+        data-print-table-right-edge="true"
         class="absolute top-0 right-0 bottom-0 w-0 pointer-events-none"
         :style="exportTableRightEdgeStyle"
       ></div>

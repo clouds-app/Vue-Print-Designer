@@ -217,6 +217,59 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
       });
     };
 
+    const isProcessableFlowWrapper = (wrapper: HTMLElement) => {
+      if (wrapper.getAttribute("data-repeat-per-page") === "true") {
+        return false;
+      }
+
+      const flowKind = getFlowKind(wrapper);
+      const table = wrapper.querySelector("table") as HTMLElement | null;
+      const autoHeightEl = resolveAutoHeightContentEl(wrapper);
+      const isAutoHeight =
+        flowKind === "auto-height" || (!table && !!autoHeightEl);
+
+      if (!table && !autoHeightEl) return false;
+
+      if (table && !isAutoHeight) {
+        return table.getAttribute("data-auto-paginate") === "true";
+      }
+
+      return true;
+    };
+
+    const hasUnresolvedEarlierFlow = (wrapper: HTMLElement) => {
+      const currentFlowId = wrapper.getAttribute("data-flow-id") || "";
+      const currentOrigin = parseAttrNumber(
+        wrapper,
+        "data-origin-page-index",
+        0,
+      );
+
+      const flowWrappers = Array.from(
+        container.querySelectorAll("[data-print-wrapper][data-flow-id]"),
+      ) as HTMLElement[];
+
+      return flowWrappers.some((candidate) => {
+        if (candidate === wrapper) return false;
+        if (candidate.getAttribute("data-flow-id") === currentFlowId) {
+          return false;
+        }
+        if (!isProcessableFlowWrapper(candidate)) return false;
+
+        const candidateOrigin = parseAttrNumber(
+          candidate,
+          "data-origin-page-index",
+          currentOrigin,
+        );
+        if (candidateOrigin !== currentOrigin) return false;
+        if (compareWrappersByOriginalTop(candidate, wrapper) >= 0) {
+          return false;
+        }
+
+        return !candidate.hasAttribute("data-flow-paginated");
+      });
+    };
+
     // 同步流式元素扩展后其下方元素的位置。
     // flowOnly=true：中间拆分页仅重排流式元素，固定元素暂不移动，
     // 直到当前拆分页链路结束（flowOnly=false）再统一收敛，保证 Y 轴顺序稳定。
@@ -438,10 +491,18 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
 
             if (isFlowWrapper) {
               // 流式包装元素（自动高度文本/表格）允许从当前页开始并跨页续拆。
-              // 仅当起点已进入页脚区域时，才整体移到下一页起始位置。
+              // 当起点进入页脚区域时，向后翻页并传递超出量，
+              // 以保持与前序流式元素之间的设计间距（而非强制贴到页顶）。
               if (targetTop >= maxContentBottom - 0.5) {
+                let overflow = targetTop - maxContentBottom;
                 targetPageIndex += 1;
-                targetTop = minContentTop;
+                targetTop = minContentTop + Math.max(overflow, 0);
+
+                while (targetTop >= maxContentBottom - 0.5) {
+                  overflow = targetTop - maxContentBottom;
+                  targetPageIndex += 1;
+                  targetTop = minContentTop + Math.max(overflow, 0);
+                }
               }
             } else if (
               wrapperHeight <= availableContentHeight &&
@@ -580,6 +641,26 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
         (el) => !["STYLE", "LINK", "SCRIPT"].includes(el.tagName),
       ) as HTMLElement[];
       return newPage;
+    };
+
+    const syncTableRightEdgeLines = (
+      wrapper: HTMLElement,
+      tableEl: HTMLElement | null,
+    ) => {
+      if (!tableEl) return;
+
+      const tableHeight = Math.max(0, tableEl.getBoundingClientRect().height);
+      const rightEdgeLines = wrapper.querySelectorAll<HTMLElement>(
+        '[data-print-table-right-edge="true"]',
+      );
+
+      rightEdgeLines.forEach((line) => {
+        line.style.setProperty("top", "0px");
+        line.style.setProperty("bottom", "auto");
+        line.style.setProperty("height", `${tableHeight}px`);
+        line.style.setProperty("max-height", "none");
+        line.style.setProperty("min-height", "0px");
+      });
     };
 
     // 通过二分查找自动高度文本可切分位置。
@@ -789,12 +870,22 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
             }
           }
 
+          // 后续流式元素必须等待前序流式元素完整分页并收敛，
+          // 否则会先生成一批过时拆分页块，前序表格扩展后就可能互相重叠。
+          if (hasUnresolvedEarlierFlow(wrapper)) return;
+
           // 解除高度限制：允许包装元素随内容自适应展开。
           wrapper.style.height = "auto";
           if (table) {
             table.style.height = "auto";
+            table.style.maxHeight = "none";
+            table.style.minHeight = "0";
             const tbodyEl = table.querySelector("tbody");
-            if (tbodyEl) (tbodyEl as HTMLElement).style.height = "auto";
+            if (tbodyEl) {
+              (tbodyEl as HTMLElement).style.height = "auto";
+              (tbodyEl as HTMLElement).style.maxHeight = "none";
+              (tbodyEl as HTMLElement).style.minHeight = "0";
+            }
 
             // 解除溢出限制：移除表格根容器的固定高度与裁剪限制。
             // 表格通常被包裹在带 h-full / overflow-hidden 的容器中。
@@ -802,8 +893,34 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
             if (tableRoot) {
               tableRoot.classList.remove("h-full", "overflow-hidden");
               tableRoot.style.height = "auto";
+              tableRoot.style.maxHeight = "none";
               tableRoot.style.overflow = "visible";
             }
+
+            // cloneElementWithStyles 会把计算后的 fixed height 直接内联到所有祖先节点。
+            // 这里沿着 table -> wrapper 链路统一解除 h-full/overflow-hidden 与 max-height 约束，
+            // 避免分页被元素框选高度误导。
+            let tableAncestor = table.parentElement as HTMLElement | null;
+            while (tableAncestor && tableAncestor !== wrapper) {
+              tableAncestor.classList.remove("h-full", "overflow-hidden");
+              tableAncestor.style.height = "auto";
+              tableAncestor.style.maxHeight = "none";
+              tableAncestor.style.overflow = "visible";
+              tableAncestor = tableAncestor.parentElement as HTMLElement | null;
+            }
+
+            // 导出态右侧补线在 clone 后可能带有固定像素高度，
+            // 需要在分页阶段回收为 top/bottom 约束，避免出现“向下延展”的竖线。
+            const rightEdgeLines = wrapper.querySelectorAll<HTMLElement>(
+              '[data-print-table-right-edge="true"]',
+            );
+            rightEdgeLines.forEach((line) => {
+              line.style.removeProperty("height");
+              line.style.removeProperty("max-height");
+              line.style.removeProperty("min-height");
+              line.style.setProperty("top", "0px");
+              line.style.setProperty("bottom", "0px");
+            });
           } else if (isAutoHeight && autoHeightEl) {
             // 去除元素自身 h-full/overflow-hidden，允许自动高度扩展。
             const htmlEl = autoHeightEl;
@@ -828,18 +945,16 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
           const wrapperRect = wrapper.getBoundingClientRect();
           const wrapperTop = wrapperRect.top;
 
-          // 检查内容是否越过当前页可用底边。
-          const contentRect = (table || autoHeightEl)!.getBoundingClientRect();
-          // 预留 1px 容差，规避亚像素误差。
-          if (contentRect.bottom <= limitBottom + 1) {
-            if (table) updatePageSums(table);
-            wrapper.setAttribute("data-flow-paginated", "true");
-            syncElementsBelowTables();
-            return;
-          }
-
           if (isAutoHeight) {
             if (!autoHeightEl) return;
+            // 自动高度文本可直接按容器底部判断是否溢出。
+            const contentRect = autoHeightEl.getBoundingClientRect();
+            if (contentRect.bottom <= limitBottom + 1) {
+              wrapper.setAttribute("data-flow-paginated", "true");
+              syncElementsBelowTables();
+              return;
+            }
+
             const textEl = autoHeightEl;
             const fullText = textEl.textContent || "";
 
@@ -1007,6 +1122,9 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
               }
             }
 
+            // 旧页表格在移除后半段行后，需要重算右侧补线高度。
+            syncTableRightEdgeLines(wrapper, table);
+
             // 清理新表格：移除 splitIndex 之前的行。
             const newTable = newWrapper.querySelector("table") as HTMLElement;
             newTable.style.height = "auto";
@@ -1020,11 +1138,20 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
             }
 
             newPage.appendChild(newWrapper);
+            // 新页表格落位后重算右侧补线高度，避免沿用克隆前高度。
+            syncTableRightEdgeLines(newWrapper, newTable);
             wrapper.setAttribute("data-flow-paginated", "true");
-            newWrapper.setAttribute("data-is-split-chunk", "true");
+            // splitIndex=0 表示旧块已被整体替换，新块应作为该流的首块参与后续重排；
+            // 否则会被 syncElementsBelowTables 当作中间拆分页块跳过，导致与前序流块重叠。
+            if (splitIndex === 0) {
+              newWrapper.removeAttribute("data-is-split-chunk");
+            } else {
+              newWrapper.setAttribute("data-is-split-chunk", "true");
+            }
 
             syncElementsBelowTables(true);
           } else {
+            syncTableRightEdgeLines(wrapper, table);
             if (table) updatePageSums(table);
             wrapper.setAttribute("data-flow-paginated", "true");
             syncElementsBelowTables();
