@@ -38,7 +38,6 @@ export default defineConfig({
       formats: ["es", "umd"],
       fileName: (format) => `print-designer.${format}.js`,
     },
-    outDir: "dist-wc",
     rollupOptions: {
       output: {
         minifyInternalExports: true,
