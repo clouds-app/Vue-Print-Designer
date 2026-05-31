@@ -196,6 +196,7 @@ watch(
     props.scroll,
     props.offset,
     props.indicators,
+    props.range,
     props.unit,
     isDark.value,
   ],

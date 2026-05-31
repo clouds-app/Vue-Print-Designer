@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { uiConfirm } from "@/utils/confirm";
@@ -2685,14 +2685,44 @@ const rulerIndicators = computed(() => {
 });
 
 const rulerRanges = computed(() => {
-  if (!dragProjection.value) return { h: null, v: null };
   brandTick.value;
   const rangeColor = getThemeRgba("--brand-300", 0.6);
-  const { minX, maxX, minY, maxY } = dragProjection.value;
-  return {
-    h: { start: minX, end: maxX, color: rangeColor },
-    v: { start: minY, end: maxY, color: rangeColor },
-  };
+
+  if (dragProjection.value) {
+    const { minX, maxX, minY, maxY } = dragProjection.value;
+    return {
+      h: { start: minX, end: maxX, color: rangeColor },
+      v: { start: minY, end: maxY, color: rangeColor },
+    };
+  }
+
+  if (store.selectedElementIds.length > 0) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (const page of store.pages) {
+      for (const el of page.elements) {
+        if (store.selectedElementIds.includes(el.id)) {
+          const bounds = store.getElementBoundsAtPosition(el, el.x, el.y);
+          minX = Math.min(minX, bounds.minX);
+          maxX = Math.max(maxX, bounds.maxX);
+          minY = Math.min(minY, bounds.minY);
+          maxY = Math.max(maxY, bounds.maxY);
+        }
+      }
+    }
+
+    if (minX !== Infinity) {
+      return {
+        h: { start: minX, end: maxX, color: rangeColor },
+        v: { start: minY, end: maxY, color: rangeColor },
+      };
+    }
+  }
+
+  return { h: null, v: null };
 });
 </script>
 
@@ -2943,25 +2973,25 @@ const rulerRanges = computed(() => {
                   <div
                     v-if="store.highlightedEdge === 'top'"
                     class="absolute left-0 right-0 border-t theme-border"
-                    :style="{ top: `${projectionViewportOffsetY}px` }"
+                    :style="{ top: `${projectionViewportOffsetY + (store.pageSpacingY || 0) * store.zoom}px` }"
                   ></div>
                   <div
                     v-else-if="store.highlightedEdge === 'bottom'"
                     class="absolute left-0 right-0 border-t theme-border"
                     :style="{
-                      top: `${projectionViewportOffsetY + store.canvasSize.height * store.zoom}px`,
+                      top: `${projectionViewportOffsetY + (store.canvasSize.height - (store.pageSpacingY || 0)) * store.zoom}px`,
                     }"
                   ></div>
                   <div
                     v-else-if="store.highlightedEdge === 'left'"
                     class="absolute top-0 bottom-0 border-l theme-border"
-                    :style="{ left: `${projectionViewportOffsetX}px` }"
+                    :style="{ left: `${projectionViewportOffsetX + (store.pageSpacingX || 0) * store.zoom}px` }"
                   ></div>
                   <div
                     v-else-if="store.highlightedEdge === 'right'"
                     class="absolute top-0 bottom-0 border-l theme-border"
                     :style="{
-                      left: `${projectionViewportOffsetX + store.canvasSize.width * store.zoom}px`,
+                      left: `${projectionViewportOffsetX + (store.canvasSize.width - (store.pageSpacingX || 0)) * store.zoom}px`,
                     }"
                   ></div>
                 </div>
@@ -3050,11 +3080,11 @@ const rulerRanges = computed(() => {
           :style="[minimapPanelStyle, { zIndex: getPanelZIndex('minimap') }]"
         >
           <div
-            class="relative h-full w-full pointer-events-auto rounded-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col"
+            class="relative h-full w-full pointer-events-auto rounded-t-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col"
             @mousedown="(e) => handleFloatingPanelMouseDown('minimap', e)"
           >
             <div
-              class="flex shrink-0 items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 cursor-move select-none"
+              class="flex shrink-0 items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 cursor-move select-none rounded-t"
               data-floating-panel-drag-handle="true"
             >
               <h3
@@ -3139,7 +3169,7 @@ const rulerRanges = computed(() => {
         :style="[sidebarPanelStyle, { zIndex: getPanelZIndex('sidebar') }]"
       >
         <div
-          class="relative h-full w-full pointer-events-auto rounded-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+          class="relative h-full w-full pointer-events-auto rounded-t-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
           @mousedown="(e) => handleFloatingPanelMouseDown('sidebar', e)"
         >
           <ElementsPanel />
@@ -3185,11 +3215,11 @@ const rulerRanges = computed(() => {
         :style="[templatePanelStyle, { zIndex: getPanelZIndex('templates') }]"
       >
         <div
-          class="relative h-full w-full pointer-events-auto rounded-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col"
+          class="relative h-full w-full pointer-events-auto rounded-t-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col"
           @mousedown="(e) => handleFloatingPanelMouseDown('templates', e)"
         >
           <div
-            class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
+            class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none rounded-t"
             data-floating-panel-drag-handle="true"
           >
             <div class="min-w-0">
@@ -3322,7 +3352,7 @@ const rulerRanges = computed(() => {
         ]"
       >
         <div
-          class="relative h-full w-full pointer-events-auto rounded-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+          class="relative h-full w-full pointer-events-auto rounded-t-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
           @mousedown="(e) => handleFloatingPanelMouseDown('properties', e)"
         >
           <PropertiesPanel />
@@ -3372,11 +3402,11 @@ const rulerRanges = computed(() => {
         ]"
       >
         <div
-          class="relative h-full w-full pointer-events-auto rounded-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col"
+          class="relative h-full w-full pointer-events-auto rounded-t-lg overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex flex-col"
           @mousedown="(e) => handleFloatingPanelMouseDown('structure', e)"
         >
           <div
-            class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
+            class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none rounded-t"
             data-floating-panel-drag-handle="true"
           >
             <div class="min-w-0">

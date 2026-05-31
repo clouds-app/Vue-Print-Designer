@@ -6,6 +6,7 @@ import { useJsonBlobModal } from "@/composables/useJsonBlobModal";
 import { useTemplateStore } from "@/stores/templates";
 import { useDesignerStore } from "@/stores/designer";
 import Printer from "~icons/material-symbols/print";
+import Loading from "@/components/common/LoadingIcon.vue";
 import FilePdf from "~icons/material-symbols/picture-as-pdf";
 import FileOutput from "~icons/material-symbols/file-download";
 import Image from "~icons/material-symbols/image";
@@ -86,30 +87,48 @@ const handlePrint = () => {
   window.dispatchEvent(new CustomEvent("designer:print"));
 };
 
-const handlePdf = () => {
+const handlePdf = async () => {
   if (previewContainer.value) {
-    const pages = Array.from(
-      previewContainer.value.querySelectorAll(".print-page"),
-    ) as HTMLElement[];
-    exportPdfHtml(pages, `${getExportBaseName()}.pdf`);
+    if (store.isGeneratingPdf) return;
+    store.isGeneratingPdf = true;
+    try {
+      const pages = Array.from(
+        previewContainer.value.querySelectorAll(".print-page")
+      ) as HTMLElement[];
+      await exportPdfHtml(pages, `${getExportBaseName()}.pdf`);
+    } finally {
+      store.isGeneratingPdf = false;
+    }
   }
 };
 
 const handleExportHtmlBtn = async () => {
   if (previewContainer.value) {
-    const pages = Array.from(
-      previewContainer.value.querySelectorAll(".print-page"),
-    ) as HTMLElement[];
-    await exportHtml(pages, `${getExportBaseName()}.html`);
+    if (store.isGeneratingHtml) return;
+    store.isGeneratingHtml = true;
+    try {
+      const pages = Array.from(
+        previewContainer.value.querySelectorAll(".print-page")
+      ) as HTMLElement[];
+      await exportHtml(pages, `${getExportBaseName()}.html`);
+    } finally {
+      store.isGeneratingHtml = false;
+    }
   }
 };
 
 const handleExportImages = async () => {
   if (previewContainer.value) {
-    const pages = Array.from(
-      previewContainer.value.querySelectorAll(".print-page"),
-    ) as HTMLElement[];
-    await exportImages(pages, getExportBaseName());
+    if (store.isGeneratingImages) return;
+    store.isGeneratingImages = true;
+    try {
+      const pages = Array.from(
+        previewContainer.value.querySelectorAll(".print-page")
+      ) as HTMLElement[];
+      await exportImages(pages, getExportBaseName());
+    } finally {
+      store.isGeneratingImages = false;
+    }
   }
 };
 
@@ -249,12 +268,12 @@ onUnmounted(() => {
 
         <!-- Content -->
         <div
-          class="flex-1 overflow-auto bg-gray-100 p-8 flex justify-center"
+          class="flex-1 overflow-auto bg-gray-100 p-8"
           ref="wrapperRef"
         >
           <div
             ref="previewContainer"
-            class="preview-content"
+            class="preview-content mx-auto pb-4"
             :style="`width: ${width}px; zoom: ${zoomPercent / 100}`"
             v-html="htmlContent"
           ></div>
@@ -262,64 +281,73 @@ onUnmounted(() => {
 
         <!-- Footer -->
         <div
-          class="p-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2.5 rounded-b-lg"
+          class="px-4 py-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2.5 shrink-0 rounded-b-lg"
         >
           <button
             @click="handlePrint"
-            class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+            :disabled="store.isGeneratingPrint"
+            class="whitespace-nowrap px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1.5 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
           >
-            <Printer class="text-lg" />
+            <Loading v-if="store.isGeneratingPrint" class="w-4 h-4 shrink-0 animate-spin" />
+            <Printer v-else class="w-4 h-4 shrink-0" />
             {{ t("editor.print") }}
           </button>
           <button
             @click="handlePdf"
-            class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+            :disabled="store.isGeneratingPdf"
+            class="whitespace-nowrap px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1.5 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
           >
-            <FileOutput class="text-lg" />
+            <Loading v-if="store.isGeneratingPdf" class="w-4 h-4 shrink-0 animate-spin" />
+            <FileOutput v-else class="w-4 h-4 shrink-0" />
             {{ t("editor.exportPdf") }}
           </button>
           <button
             @click="handleExportImages"
-            class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+            :disabled="store.isGeneratingImages"
+            class="whitespace-nowrap px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1.5 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
           >
-            <FileOutput class="text-lg" />
+            <Loading v-if="store.isGeneratingImages" class="w-4 h-4 shrink-0 animate-spin" />
+            <FileOutput v-else class="w-4 h-4 shrink-0" />
             {{ t("editor.exportImage") }}
           </button>
           <button
             @click="handleExportHtmlBtn"
-            class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+            :disabled="store.isGeneratingHtml"
+            class="whitespace-nowrap px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1.5 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
           >
-            <FileOutput class="text-lg" />
+            <Loading v-if="store.isGeneratingHtml" class="w-4 h-4 shrink-0 animate-spin" />
+            <FileOutput v-else class="w-4 h-4 shrink-0" />
             {{ t("editor.exportHtml") }}
           </button>
           <button
             v-if="store.showDeveloperMode"
             @click="handleViewImageBlob"
-            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
+            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
           >
-            <DataObject class="text-lg" />
+            <DataObject class="w-4 h-4 shrink-0" />
             {{ t("editor.viewImageBlob") }}
           </button>
           <button
             v-if="store.showDeveloperMode"
             @click="handleViewPdfBlob"
-            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
+            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
           >
-            <DataObject class="text-lg" />
+            <DataObject class="w-4 h-4 shrink-0" />
             {{ t("editor.viewPdfBlob") }}
           </button>
           <button
             v-if="store.showDeveloperMode"
             @click="handleViewJson"
-            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
+            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
           >
-            <DataObject class="text-lg" />
+            <DataObject class="w-4 h-4 shrink-0" />
             {{ t("editor.viewJson") }}
           </button>
           <button
             @click="handleClose"
-            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-100"
+            class="whitespace-nowrap px-3 py-1.5 border border-red-200 bg-red-50 text-red-600 rounded hover:bg-red-100 flex items-center gap-1.5 text-xs transition-colors"
           >
+            <Close class="w-4 h-4 shrink-0" />
             {{ t("common.close") }}
           </button>
         </div>
@@ -343,17 +371,12 @@ onUnmounted(() => {
 <style scoped>
 /* Ensure the preview content styling matches print expectations */
 :deep(.print-page) {
-  margin-bottom: 20px;
+  margin-bottom: 40px;
   background: white;
   box-shadow: none !important; /* Remove shadows in preview if desired, or keep for visual separation */
   position: relative !important; /* Reset position for stack flow */
   left: auto !important;
   top: auto !important;
-}
-
-/* Hide the last margin */
-:deep(.print-page:last-child) {
-  margin-bottom: 0;
 }
 
 /* Force default cursor for all elements in preview */

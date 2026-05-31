@@ -10,6 +10,8 @@ import {
 } from "vue";
 import { useI18n } from "vue-i18n";
 import X from "~icons/material-symbols/close";
+import Check from "~icons/material-symbols/check";
+import Printer from "~icons/material-symbols/print";
 import { usePrintSettings } from "@/composables/usePrintSettings";
 import type {
   PrintOptions,
@@ -327,7 +329,7 @@ onUnmounted(() => {
         class="bg-white rounded-lg shadow-xl w-[700px] max-w-full max-h-[90vh] flex flex-col overflow-hidden"
       >
         <div
-          class="h-[52px] flex items-center justify-between px-4 border-b border-gray-200"
+          class="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0"
         >
           <h3 class="text-base font-semibold text-gray-800">{{ modeTitle }}</h3>
           <button
@@ -593,18 +595,20 @@ onUnmounted(() => {
         </div>
 
         <div
-          class="p-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2.5 rounded-b-lg"
+          class="px-4 py-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2.5 shrink-0 rounded-b-lg"
         >
           <button
             @click="close"
-            class="px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-100 text-xs text-gray-700"
+            class="whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 border border-red-200 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs transition-colors"
           >
+            <X class="w-4 h-4 shrink-0" />
             {{ t("common.close") }}
           </button>
           <button
             @click="confirm"
-            class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs"
+            class="whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs"
           >
+            <Printer class="w-4 h-4 shrink-0" />
             {{ t("printDialog.confirm") }}
           </button>
         </div>

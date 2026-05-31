@@ -637,7 +637,7 @@ onUnmounted(() => {
 <template>
   <aside class="w-full bg-white dark:bg-gray-900 flex flex-col h-full z-40">
     <div
-      class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
+      class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none rounded-t"
       data-floating-panel-drag-handle="true"
     >
       <div class="min-w-0">
@@ -695,7 +695,7 @@ onUnmounted(() => {
           :style="elementsHelpArrowStyle"
         ></div>
         <div
-          class="overflow-y-auto p-3"
+          class="overflow-y-auto custom-scrollbar p-3"
           :style="{ maxHeight: elementsHelpTooltipStyle.maxHeight }"
         >
           <div class="flex items-start gap-2">
@@ -757,7 +757,7 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <div class="flex-1 overflow-y-auto">
+    <div class="flex-1 overflow-y-auto custom-scrollbar">
       <!-- Standard Elements Tab -->
       <template v-if="activeTab === 'standard'">
         <div

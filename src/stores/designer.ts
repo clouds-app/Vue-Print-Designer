@@ -625,6 +625,11 @@ export const useDesignerStore = defineStore("designer", {
     clipboard: [],
     copiedPage: null,
     isExporting: false,
+    isGeneratingPreview: false,
+    isGeneratingPrint: false,
+    isGeneratingPdf: false,
+    isGeneratingHtml: false,
+    isGeneratingImages: false,
     disableGlobalShortcuts: false,
     disableShortcutsCount: 0,
     tableSelection: null,
@@ -3210,6 +3215,58 @@ export const useDesignerStore = defineStore("designer", {
       }
 
       this.ensureEmbeddedElementsAboveTables(selectedTableIds);
+    },
+    reorderElementsLayer(sourceId: string, targetId: string, position: "before" | "after") {
+      if (!this.isTemplateEditable) return;
+      if (sourceId === targetId) return;
+
+      for (let pageIndex = 0; pageIndex < this.pages.length; pageIndex += 1) {
+        const page = this.pages[pageIndex];
+        const sourceIndex = page.elements.findIndex(e => e.id === sourceId);
+        const targetIndex = page.elements.findIndex(e => e.id === targetId);
+
+        if (sourceIndex === -1 || targetIndex === -1) continue;
+        if (page.elements[sourceIndex].locked) continue; // Cannot reorder locked items freely
+
+        const ordered = getLayerSortedElements(page);
+        
+        const sourceOrderedIndex = ordered.findIndex(item => item.element.id === sourceId);
+        if (sourceOrderedIndex === -1) continue;
+        const sourceItem = ordered[sourceOrderedIndex];
+        ordered.splice(sourceOrderedIndex, 1);
+
+        const newTargetOrderedIndex = ordered.findIndex(item => item.element.id === targetId);
+        if (newTargetOrderedIndex === -1) continue;
+
+        // Position mapping: 
+        // Component structure panel is sorted Z-Descending (Top to Bottom visually)
+        // `ordered` array is Z-Ascending (Bottom to Top visually)
+        // If Structure Panel position is "before" (place ABOVE visually): we insert AFTER in Z-Ascending array
+        // If Structure Panel position is "after" (place BELOW visually): we insert BEFORE in Z-Ascending array
+        let insertIndex = newTargetOrderedIndex;
+        if (position === "before") {
+          // Put *after* the target in the ascending array (higher Z)
+          insertIndex = newTargetOrderedIndex + 1;
+        }
+
+        ordered.splice(insertIndex, 0, sourceItem);
+
+        this.snapshot(HISTORY_ACTION.ELEMENT_LAYER);
+
+        ordered.forEach((item, idx) => {
+          const targetZ = idx + 1;
+          const elIndex = page.elements.findIndex(e => e.id === item.element.id);
+          if (elIndex !== -1) {
+            const el = page.elements[elIndex];
+            if (getElementZIndex(el) !== targetZ) {
+               page.elements[elIndex] = {
+                 ...el,
+                 style: { ...(el.style || {}), zIndex: targetZ }
+               };
+            }
+          }
+        });
+      }
     },
     canMoveElementsLayer(ids: string[], mode: LayerMoveMode) {
       if (!this.isTemplateEditable) return false;

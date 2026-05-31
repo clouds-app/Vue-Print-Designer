@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted, inject } from "vue";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "@/composables/useTheme";
@@ -435,8 +435,8 @@ onUnmounted(() => {
         class="bg-white rounded-lg shadow-xl w-[700px] max-w-full h-[500px] flex overflow-hidden"
       >
         <!-- Sidebar Tabs -->
-        <div class="w-48 bg-gray-50 border-r border-gray-200 flex flex-col">
-          <div class="h-14 flex items-center px-4 border-b border-gray-200">
+        <div class="w-48 bg-gray-50 border-r border-gray-200 flex flex-col shrink-0">
+          <div class="flex items-center px-4 py-3 border-b border-gray-200 shrink-0">
             <h3 class="text-base font-semibold text-gray-800">
               {{ t("settings.title") }}
             </h3>
@@ -522,7 +522,7 @@ onUnmounted(() => {
         <!-- Content Area -->
         <div class="flex-1 flex flex-col min-w-0 relative">
           <div
-            class="h-14 flex items-center justify-between px-4 border-b border-gray-200"
+            class="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0"
           >
             <div class="flex items-center gap-3">
               <h3 class="text-base font-semibold text-gray-800">
@@ -557,7 +557,7 @@ onUnmounted(() => {
                 </div>
                 <div class="flex items-center gap-3">
                   <label
-                    class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                    class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                     :class="
                       selectedTheme === 'system'
                         ? 'border-blue-600 text-blue-700'
@@ -572,7 +572,7 @@ onUnmounted(() => {
                     <span>{{ t("settings.themeSystem") }}</span>
                   </label>
                   <label
-                    class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                    class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                     :class="
                       selectedTheme === 'light'
                         ? 'border-blue-600 text-blue-700'
@@ -583,7 +583,7 @@ onUnmounted(() => {
                     <span>{{ t("settings.themeLight") }}</span>
                   </label>
                   <label
-                    class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                    class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                     :class="
                       selectedTheme === 'dark'
                         ? 'border-blue-600 text-blue-700'
@@ -610,7 +610,7 @@ onUnmounted(() => {
                     )"
                     :key="preset.key"
                     type="button"
-                    class="flex items-center gap-2 px-3 py-2 border rounded text-xs transition-colors"
+                    class="flex items-center gap-2 px-3 py-1.5 border rounded text-xs transition-colors"
                     :class="
                       selectedBrandKey === preset.key
                         ? 'border-blue-600 text-blue-700'
@@ -641,7 +641,7 @@ onUnmounted(() => {
                     <template #trigger="{ color, open }">
                       <button
                         type="button"
-                        class="flex items-center gap-2 px-3 py-2 border rounded text-xs transition-colors"
+                        class="flex items-center gap-2 px-3 py-1.5 border rounded text-xs transition-colors"
                         :class="
                           selectedBrandKey === 'custom'
                             ? 'border-blue-600 text-blue-700'
@@ -808,7 +808,7 @@ onUnmounted(() => {
                 </div>
                 <div class="flex items-center gap-3">
                   <label
-                    class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                    class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                     :class="
                       printQuality === 'fast'
                         ? 'border-blue-600 text-blue-700'
@@ -819,7 +819,7 @@ onUnmounted(() => {
                     <span>{{ t("settings.printQualityFast") }}</span>
                   </label>
                   <label
-                    class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                    class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                     :class="
                       printQuality === 'normal'
                         ? 'border-blue-600 text-blue-700'
@@ -830,7 +830,7 @@ onUnmounted(() => {
                     <span>{{ t("settings.printQualityNormal") }}</span>
                   </label>
                   <label
-                    class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                    class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                     :class="
                       printQuality === 'high'
                         ? 'border-blue-600 text-blue-700'
@@ -841,7 +841,7 @@ onUnmounted(() => {
                     <span>{{ t("settings.printQualityHigh") }}</span>
                   </label>
                   <label
-                    class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                    class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                     :class="
                       printQuality === 'ultra'
                         ? 'border-blue-600 text-blue-700'
@@ -891,7 +891,7 @@ onUnmounted(() => {
                   </div>
                   <div class="flex items-center gap-3">
                     <label
-                      class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                      class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                       :class="
                         printMode === 'browser'
                           ? 'border-blue-600 text-blue-700'
@@ -902,7 +902,7 @@ onUnmounted(() => {
                       <span>{{ t("settings.printModeBrowser") }}</span>
                     </label>
                     <label
-                      class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                      class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                       :class="
                         printMode === 'local'
                           ? 'border-blue-600 text-blue-700'
@@ -918,7 +918,7 @@ onUnmounted(() => {
                       <span>{{ t("settings.printModeLocal") }}</span>
                     </label>
                     <label
-                      class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                      class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                       :class="
                         printMode === 'remote'
                           ? 'border-blue-600 text-blue-700'
@@ -974,7 +974,7 @@ onUnmounted(() => {
                 <label
                   v-for="option in languageOptions"
                   :key="option.value"
-                  class="flex items-center gap-2 px-3 py-2 border rounded cursor-pointer"
+                  class="flex items-center gap-2 px-3 py-1.5 border rounded cursor-pointer text-xs"
                   :class="
                     selectedLang === option.value
                       ? 'border-blue-600 text-blue-700'
@@ -1167,7 +1167,7 @@ onUnmounted(() => {
 
           <div
             v-if="activeTab === 'local' || activeTab === 'remote'"
-            class="p-3 border-t border-gray-200 bg-gray-50 flex justify-end rounded-br-lg"
+            class="px-4 py-3 border-t border-gray-200 bg-gray-50 flex justify-end shrink-0 rounded-br-lg"
           >
             <!-- Local Connection Button -->
             <div v-if="activeTab === 'local'" class="w-full">

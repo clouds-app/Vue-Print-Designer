@@ -2,6 +2,7 @@
 import { ref, watch, onUnmounted, computed, inject } from "vue";
 import { useI18n } from "vue-i18n";
 import Close from "~icons/material-symbols/close";
+import Check from "~icons/material-symbols/check";
 import { useDesignerStore } from "@/stores/designer";
 import { useTheme } from "@/composables/useTheme";
 
@@ -209,10 +210,10 @@ onUnmounted(() => {
     >
       <div
         ref="modalRef"
-        class="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-96 animate-in fade-in zoom-in duration-200 flex flex-col overflow-hidden"
+        class="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-96 max-h-[90vh] animate-in fade-in zoom-in duration-200 flex flex-col overflow-hidden"
       >
         <div
-          class="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0"
+          class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0"
         >
           <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">
             {{ title || t("input.title") }}
@@ -225,8 +226,8 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <div class="p-4">
-          <div class="mb-4 space-y-3">
+        <div class="flex-1 overflow-y-auto p-4">
+          <div class="space-y-3">
             <div
               v-for="field in visibleFields"
               :key="field.key"
@@ -331,22 +332,24 @@ onUnmounted(() => {
               />
             </div>
           </div>
+        </div>
 
-          <div class="flex justify-end gap-2">
-            <button
-              @click="emit('close')"
-              class="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors"
-            >
-              {{ t("common.cancel") }}
-            </button>
-            <button
-              @click="handleSave"
-              :disabled="!isFormValid"
-              class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {{ t("common.confirm") }}
-            </button>
-          </div>
+        <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50 flex justify-end gap-2.5 shrink-0 rounded-b-lg">
+          <button
+            @click="emit('close')"
+            class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 border border-red-200 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs transition-colors"
+          >
+            <Close class="w-4 h-4 shrink-0" />
+            {{ t("common.cancel") }}
+          </button>
+          <button
+            @click="handleSave"
+            :disabled="!isFormValid"
+            class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+          >
+            <Check class="w-4 h-4 shrink-0" />
+            {{ t("common.confirm") }}
+          </button>
         </div>
       </div>
     </div>

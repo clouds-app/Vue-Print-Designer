@@ -370,6 +370,69 @@ const handleNodeMouseLeave = (node: LayoutNode) => {
   emitStructurePanelHoverEvent(node, false);
 };
 
+// Drag & Drop logic for reordering layers
+const draggedNode = ref<LayoutNode | null>(null);
+const dropTarget = ref<{ id: string; position: "before" | "after" } | null>(null);
+
+const onDragStart = (e: DragEvent, node: LayoutNode) => {
+  if (!store.isTemplateEditable || node.element.locked) {
+    e.preventDefault();
+    return;
+  }
+  draggedNode.value = node;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", node.id);
+  }
+};
+
+const onDragOver = (e: DragEvent, node: LayoutNode) => {
+  if (!draggedNode.value || draggedNode.value.id === node.id || node.pageIndex !== draggedNode.value.pageIndex) {
+    return;
+  }
+  
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = "move";
+  }
+
+  const targetElement = e.currentTarget as HTMLElement;
+  const rect = targetElement.getBoundingClientRect();
+  const relY = e.clientY - rect.top;
+  const position = relY < rect.height / 2 ? "before" : "after";
+  
+  dropTarget.value = { id: node.id, position };
+};
+
+const onDragLeave = (e: DragEvent, node: LayoutNode) => {
+  if (dropTarget.value?.id === node.id) {
+    // Only clear if we are genuinely leaving the element, not just a child
+    const currentTarget = e.currentTarget as HTMLElement;
+    const relatedTarget = e.relatedTarget as Node | null;
+    if (!currentTarget.contains(relatedTarget)) {
+      dropTarget.value = null;
+    }
+  }
+};
+
+const onDrop = (e: DragEvent, node: LayoutNode) => {
+  if (!draggedNode.value || !dropTarget.value) return;
+
+  const targetId = dropTarget.value.id;
+  const position = dropTarget.value.position;
+  
+  if (draggedNode.value.id !== targetId) {
+    store.reorderElementsLayer(draggedNode.value.id, targetId, position);
+  }
+  
+  dropTarget.value = null;
+  draggedNode.value = null;
+};
+
+const onDragEnd = () => {
+  draggedNode.value = null;
+  dropTarget.value = null;
+};
+
 const focusPage = (pageIndex: number) => {
   store.currentPageIndex = pageIndex;
 };
@@ -559,13 +622,24 @@ onUnmounted(() => {
             :key="node.id"
             class="border-t border-gray-100 dark:border-gray-700"
           >
+            <!-- Element Node -->
             <div
-              class="group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors"
-              :class="
+              class="group flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors relative"
+              :class="[
                 isElementSelected(node.id)
                   ? 'bg-blue-50 dark:bg-blue-900/30'
-                  : 'hover:bg-gray-50 dark:hover:bg-gray-700'
-              "
+                  : 'hover:bg-gray-50 dark:hover:bg-gray-700',
+                {
+                   'border-t-2 border-t-blue-500': dropTarget?.id === node.id && dropTarget.position === 'before',
+                   'border-b-2 border-b-blue-500': dropTarget?.id === node.id && dropTarget.position === 'after'
+                }
+              ]"
+              draggable="true"
+              @dragstart="onDragStart($event, node)"
+              @dragover.prevent="onDragOver($event, node)"
+              @dragleave.prevent="onDragLeave($event, node)"
+              @drop.prevent="onDrop($event, node)"
+              @dragend.prevent="onDragEnd"
               @mouseenter="handleNodeMouseEnter(node)"
               @mouseleave="handleNodeMouseLeave(node)"
               @click="(event) => selectNode(node, event)"

@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { computed, inject, ref } from "vue";
+import { computed, inject, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDesignerStore } from "@/stores/designer";
 import { useTemplateStore } from "@/stores/templates";
+import { canEditEntity } from "@/utils/entityConstraints";
 import HeaderToolbar from "./toolbar/HeaderToolbar.vue";
 import HeaderElementsBar from "./toolbar/HeaderElementsBar.vue";
 import HelpModal from "./help/HelpModal.vue";
 import SettingsModal from "./settings/SettingsModal.vue";
 import defaultLogo from "@/assets/logo.png";
 import Save from "~icons/material-symbols/save";
-import Loading from "~icons/material-symbols/progress-activity";
+import Loading from "@/components/common/LoadingIcon.vue";
 import ChevronDown from "~icons/material-symbols/expand-more";
 import SaveAs from "~icons/material-symbols/save-as";
 import PreviewIcon from "~icons/material-symbols/preview";
@@ -24,6 +25,21 @@ const store = useDesignerStore();
 const templateStore = useTemplateStore();
 const designerInstanceId = inject<string | null>("designer-instance-id", null);
 const showExportMenu = ref(false);
+
+const isSaveDisabled = computed(() => {
+  if (templateStore.isSaving || templateStore.isLoading) return true;
+  
+  if (templateStore.currentTemplateId) {
+    const t = templateStore.templates.find(
+      (t) => t.id === templateStore.currentTemplateId
+    );
+    if (t && !canEditEntity(t)) {
+      return true;
+    }
+  }
+  
+  return !templateStore.hasUnsavedChanges;
+});
 
 const showLogo = computed(() => store.branding?.showLogo !== false);
 const showTitle = computed(() => store.branding?.showTitle !== false);
@@ -41,12 +57,30 @@ const dispatchDesignerEvent = (
   window.dispatchEvent(new CustomEvent(name, { detail: payload }));
 };
 
-const handleSave = () => {
-  dispatchDesignerEvent("designer:save");
-};
-
 const closeExportMenu = () => {
   showExportMenu.value = false;
+};
+
+watch(
+  () => [
+    store.isGeneratingPreview,
+    store.isGeneratingPrint,
+    store.isGeneratingPdf,
+    store.isGeneratingHtml,
+    store.isGeneratingImages,
+  ],
+  (newVals, oldVals) => {
+    // If any was loading and now none are loading, close the menu automatically
+    const wasLoading = oldVals.some((v) => v);
+    const isLoading = newVals.some((v) => v);
+    if (wasLoading && !isLoading) {
+      closeExportMenu();
+    }
+  }
+);
+
+const handleSave = () => {
+  dispatchDesignerEvent("designer:save");
 };
 
 const handleSaveAs = () => {
@@ -58,28 +92,28 @@ const handleSaveAs = () => {
 };
 
 const handlePreview = () => {
+  if (store.isGeneratingPreview) return;
   dispatchDesignerEvent("designer:preview");
-  closeExportMenu();
 };
 
 const handlePrint = () => {
+  if (store.isGeneratingPrint) return;
   dispatchDesignerEvent("designer:print");
-  closeExportMenu();
 };
 
 const handleExportPdf = () => {
+  if (store.isGeneratingPdf) return;
   dispatchDesignerEvent("designer:export-pdf");
-  closeExportMenu();
 };
 
 const handleExportHtml = () => {
+  if (store.isGeneratingHtml) return;
   dispatchDesignerEvent("designer:export-html");
-  closeExportMenu();
 };
 
 const handleExportImages = () => {
+  if (store.isGeneratingImages) return;
   dispatchDesignerEvent("designer:export-images");
-  closeExportMenu();
 };
 
 const handleViewImageBlob = () => {
@@ -136,8 +170,12 @@ const handleOpenSettings = () => {
         <div class="flex items-center shadow-sm">
           <button
             @click="handleSave"
-            :disabled="templateStore.isSaving"
-            class="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-l-md hover:bg-blue-700 transition-colors text-sm border-r border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="isSaveDisabled"
+            :class="[
+              'shrink-0 flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-l-md transition-colors text-sm border-r border-blue-500',
+              !isSaveDisabled ? 'hover:bg-blue-700' : 'cursor-not-allowed',
+              (templateStore.isSaving || templateStore.isLoading) ? 'opacity-50' : ''
+            ]"
           >
             <Loading
               v-if="templateStore.isSaving"
@@ -156,7 +194,7 @@ const handleOpenSettings = () => {
 
         <div
           v-if="showExportMenu"
-          class="absolute top-full right-0 mt-2 w-max min-w-[160px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-lg p-1 z-[3200] flex flex-col gap-1"
+          class="absolute top-full right-0 mt-2 w-max min-w-[160px] bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-xl p-1 z-[3200] flex flex-col gap-1"
         >
           <button
             @click="handleSaveAs"
@@ -169,35 +207,40 @@ const handleOpenSettings = () => {
             @click="handlePreview"
             class="w-full flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded text-sm text-left transition-colors whitespace-nowrap"
           >
-            <PreviewIcon class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <Loading v-if="store.isGeneratingPreview" class="w-4 h-4 text-blue-500 animate-spin" />
+            <PreviewIcon v-else class="w-4 h-4 text-gray-500 dark:text-gray-400" />
             <span>{{ t("editor.preview") }}</span>
           </button>
           <button
             @click="handlePrint"
             class="w-full flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded text-sm text-left transition-colors whitespace-nowrap"
           >
-            <PrinterIcon class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <Loading v-if="store.isGeneratingPrint" class="w-4 h-4 text-blue-500 animate-spin" />
+            <PrinterIcon v-else class="w-4 h-4 text-gray-500 dark:text-gray-400" />
             <span>{{ t("editor.print") }}</span>
           </button>
           <button
             @click="handleExportPdf"
             class="w-full flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded text-sm text-left transition-colors whitespace-nowrap"
           >
-            <FileOutput class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <Loading v-if="store.isGeneratingPdf" class="w-4 h-4 text-blue-500 animate-spin" />
+            <FileOutput v-else class="w-4 h-4 text-gray-500 dark:text-gray-400" />
             <span>{{ t("editor.exportPdf") }}</span>
           </button>
           <button
             @click="handleExportHtml"
             class="w-full flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded text-sm text-left transition-colors whitespace-nowrap"
           >
-            <FileOutput class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <Loading v-if="store.isGeneratingHtml" class="w-4 h-4 text-blue-500 animate-spin" />
+            <FileOutput v-else class="w-4 h-4 text-gray-500 dark:text-gray-400" />
             <span>{{ t("editor.exportHtml") }}</span>
           </button>
           <button
             @click="handleExportImages"
             class="w-full flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded text-sm text-left transition-colors whitespace-nowrap"
           >
-            <FileOutput class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <Loading v-if="store.isGeneratingImages" class="w-4 h-4 text-blue-500 animate-spin" />
+            <FileOutput v-else class="w-4 h-4 text-gray-500 dark:text-gray-400" />
             <span>{{ t("editor.exportImage") }}</span>
           </button>
           <button
@@ -215,14 +258,6 @@ const handleOpenSettings = () => {
           >
             <DataObject class="w-4 h-4 text-gray-500 dark:text-gray-400" />
             <span>{{ t("editor.viewPdfBlob") }}</span>
-          </button>
-          <button
-            v-if="store.showDeveloperMode"
-            @click="handleViewJson"
-            class="w-full flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded text-sm text-left transition-colors whitespace-nowrap"
-          >
-            <DataObject class="w-4 h-4 text-gray-500 dark:text-gray-400" />
-            <span>{{ t("editor.viewJson") }}</span>
           </button>
           <div class="h-px bg-gray-200 dark:bg-gray-700 my-0.5"></div>
           <button

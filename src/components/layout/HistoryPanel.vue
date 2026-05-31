@@ -515,7 +515,7 @@ onUnmounted(() => {
   <div
     v-if="store.showHistoryPanel"
     ref="panelRef"
-    class="fixed bg-white dark:bg-gray-800 shadow-xl rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden"
+    class="fixed bg-white dark:bg-gray-800 rounded-t-lg shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden"
     @mousedown="handlePanelMouseDown"
     :style="{
       left: `${panelPos.x}px`,
@@ -526,7 +526,7 @@ onUnmounted(() => {
     }"
   >
     <div
-      class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
+      class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none rounded-t-lg"
       @mousedown="handleDragStart"
     >
       <div class="min-w-0">
@@ -736,23 +736,5 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #e5e7eb;
-  border-radius: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #d1d5db;
-}
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #374151;
-}
-.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #4b5563;
-}
+  /* custom-scrollbar inherited from global style.css */
 </style>

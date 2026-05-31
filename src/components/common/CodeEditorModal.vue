@@ -12,6 +12,9 @@ import { useI18n } from "vue-i18n";
 import { useDesignerStore } from "@/stores/designer";
 import { useTheme } from "@/composables/useTheme";
 import Close from "~icons/material-symbols/close";
+import Save from "~icons/material-symbols/save";
+import ContentCopy from "~icons/material-symbols/content-copy";
+import Check from "~icons/material-symbols/check";
 
 const Editor = defineAsyncComponent(() =>
   import("@guolao/vue-monaco-editor").then((m) => m.Editor),
@@ -194,7 +197,7 @@ onUnmounted(() => {
       >
         <!-- Header -->
         <div
-          class="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-800 shrink-0"
+          class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0"
         >
           <div class="flex items-center gap-2">
             <h3
@@ -234,31 +237,35 @@ onUnmounted(() => {
 
         <!-- Footer -->
         <div
-          class="p-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 flex justify-end rounded-b-lg"
+          class="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 flex justify-end gap-2.5 rounded-b-lg shrink-0"
         >
           <button
             v-if="shouldShowSaveButton"
             @click="handleSave"
-            class="px-3 py-1.5 theme-bg-strong text-white rounded hover:opacity-90 transition-opacity text-xs mr-2"
+            class="flex items-center gap-1.5 px-3 py-1.5 theme-bg-strong text-white rounded hover:opacity-90 transition-opacity text-xs"
           >
+            <Save class="w-4 h-4" />
             {{ t("common.save") }}
           </button>
           <button
             v-if="shouldShowCopyButton"
             @click="handleCopy"
-            class="px-3 py-1.5 border dark:border-gray-600 font-medium rounded transition-colors text-xs mr-2 min-w-[64px]"
+            class="flex items-center gap-1.5 px-3 py-1.5 border dark:border-gray-600 font-medium rounded transition-colors text-xs min-w-[64px]"
             :class="
               copyState === 'success'
                 ? 'theme-border theme-bg text-white'
                 : 'border-gray-300 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
             "
           >
+            <Check v-if="copyState === 'success'" class="w-4 h-4" />
+            <ContentCopy v-else class="w-4 h-4" />
             {{ copyButtonLabel }}
           </button>
           <button
             @click="handleClose"
-            class="px-3 py-1.5 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-xs"
+            class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 border border-red-200 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs transition-colors"
           >
+            <Close class="w-4 h-4" />
             {{ t("common.close") }}
           </button>
         </div>

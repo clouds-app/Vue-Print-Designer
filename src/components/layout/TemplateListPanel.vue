@@ -63,6 +63,10 @@ const testDataContent = ref("");
 const testDataTarget = ref<Template | null>(null);
 const testDataAllowedKeys = ref<string[]>([]);
 
+const showJsonModal = ref(false);
+const jsonContent = ref("");
+const jsonTarget = ref<Template | null>(null);
+
 type TemplateMenuItemView = ListContextMenuItem & { iconComponent?: Component };
 type ModalSavePayload = string | Record<string, any>;
 const VARIABLE_DRAG_MIME = "application/x-print-designer-variable";
@@ -571,7 +575,39 @@ const handleTestData = async (template: Template) => {
   showTestDataModal.value = true;
 };
 
+const handleViewJson = async (template: Template) => {
+  activeMenuId.value = null;
+  const detail = await templateStore.fetchTemplateDetail(template.id);
+  jsonTarget.value = detail || template;
+  let targetData = jsonTarget.value.data;
+  if (templateStore.currentTemplateId === jsonTarget.value.id) {
+    targetData = {
+      pages: JSON.parse(JSON.stringify(designerStore.pages)),
+      canvasSize: JSON.parse(JSON.stringify(designerStore.canvasSize)),
+      guides: JSON.parse(JSON.stringify(designerStore.guides)),
+      zoom: designerStore.zoom,
+      showGrid: designerStore.showGrid,
+      allowDragOutsideCanvas: designerStore.allowDragOutsideCanvas,
+      headerHeight: designerStore.headerHeight,
+      footerHeight: designerStore.footerHeight,
+      showHeaderLine: designerStore.showHeaderLine,
+      showFooterLine: designerStore.showFooterLine,
+      enableHeaderFooterLineRendering: designerStore.enableHeaderFooterLineRendering,
+      headerLineStyle: designerStore.headerLineStyle,
+      footerLineStyle: designerStore.footerLineStyle,
+    };
+  }
+  jsonContent.value = JSON.stringify(targetData, null, 2);
+  showJsonModal.value = true;
+};
+
 const defaultTemplateMenuItems = computed<TemplateMenuItemView[]>(() => [
+  {
+    key: "viewJson",
+    actionKey: "viewJson",
+    label: t("editor.viewJson"),
+    iconComponent: DataObject,
+  },
   {
     key: "testData",
     actionKey: "testData",
@@ -652,6 +688,10 @@ const runBuiltInMenuAction = (
   template: Template,
 ) => {
   const key = (actionKey || "") as TemplateMenuActionKey;
+  if (key === "viewJson") {
+    handleViewJson(template);
+    return;
+  }
   if (key === "testData") {
     handleTestData(template);
     return;
@@ -740,6 +780,31 @@ const handleTestDataClose = () => {
   } else {
     templateStore.updateTemplate(target.id, { data: target.data });
   }
+};
+
+const handleJsonSave = () => {
+  const target = jsonTarget.value;
+  if (!target) return;
+
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(jsonContent.value?.trim() || "{}");
+  } catch {
+    parsed = null;
+  }
+
+  if (!parsed) {
+    toast.error(t("common.invalidJson"));
+    return;
+  }
+
+  if (templateStore.currentTemplateId === target.id) {
+    designerStore.applyTemplateJsonToDesigner(parsed);
+  } else {
+    target.data = { ...target.data, ...parsed };
+    templateStore.updateTemplate(target.id, { data: target.data });
+  }
+  showJsonModal.value = false;
 };
 
 const handleModalSave = (payload: ModalSavePayload) => {
@@ -1103,6 +1168,17 @@ onUnmounted(() => {
       language="json"
       @update:value="testDataContent = $event"
       @close="handleTestDataClose"
+    />
+
+    <CodeEditorModal
+      v-model:visible="showJsonModal"
+      :title="t('preview.templateJson')"
+      :value="jsonContent"
+      language="json"
+      :read-only="jsonTarget ? !canEditEntity(jsonTarget) : false"
+      :show-save-button="jsonTarget ? canEditEntity(jsonTarget) : false"
+      @update:value="jsonContent = $event"
+      @save="handleJsonSave"
     />
   </div>
 </template>

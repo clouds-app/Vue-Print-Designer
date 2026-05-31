@@ -237,16 +237,28 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
     };
 
     const isAxisAlignedWrapper = (wrapper: HTMLElement) => {
-      const transform = window.getComputedStyle(wrapper).transform;
-      if (!transform || transform === "none") return true;
-      if (!transform.startsWith("matrix")) return false;
+      let isAligned = wrapper.getAttribute("data-axis-aligned");
+      if (isAligned !== null) {
+        return isAligned === "true";
+      }
 
-      const values = transform.substring(7, transform.length - 1).split(",");
-      if (values.length < 4) return false;
+      let transform = wrapper.style.transform;
+      if (!transform) {
+        transform = window.getComputedStyle(wrapper).transform;
+      }
 
-      const b = parseFloat(values[1]);
-      const c = parseFloat(values[2]);
-      return Math.abs(b) <= 0.001 && Math.abs(c) <= 0.001;
+      let result = true;
+      if (transform && transform !== "none" && transform.startsWith("matrix")) {
+        const values = transform.substring(7, transform.length - 1).split(",");
+        if (values.length >= 4) {
+          const b = parseFloat(values[1]);
+          const c = parseFloat(values[2]);
+          result = Math.abs(b) <= 0.001 && Math.abs(c) <= 0.001;
+        }
+      }
+
+      wrapper.setAttribute("data-axis-aligned", result ? "true" : "false");
+      return result;
     };
 
     // 获取元素初始 top（优先原始元数据）。
@@ -749,53 +761,59 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
       if (!tableEl) return;
 
       const tableRect = tableEl.getBoundingClientRect();
-      const rightEdgeLines = wrapper.querySelectorAll<HTMLElement>(
+      const rightEdgeLines = Array.from(wrapper.querySelectorAll<HTMLElement>(
         '[data-print-table-right-edge="true"]',
-      );
+      ));
 
-      rightEdgeLines.forEach((line) => {
-        const offsetParent = line.offsetParent as HTMLElement | null;
-        const offsetParentRect = (offsetParent || wrapper).getBoundingClientRect();
-        const tableHeight = Math.max(0, Math.round(tableRect.height));
-        const topOffset = Math.max(
-          0,
-          Math.round(tableRect.top - offsetParentRect.top),
-        );
-        const rightInset = Math.max(
-          0,
-          Math.round(offsetParentRect.right - tableRect.right),
-        );
-
-        const lineComputedStyle = window.getComputedStyle(line);
+      if (rightEdgeLines.length > 0) {
+        // 提取 table 计算样式到循环外，仅读一次
+        // 注意：table 的 ComputedStyle 虽然是读取，但也依赖于文档前序是否有未提交变动。
         const tableComputedStyle = window.getComputedStyle(tableEl);
-        const borderLeftWidth = parseFloat(lineComputedStyle.borderLeftWidth || "0");
-        const hasVisibleBorder =
-          Number.isFinite(borderLeftWidth) &&
-          borderLeftWidth > 0 &&
-          lineComputedStyle.borderLeftStyle !== "none";
-        if (!hasVisibleBorder) {
-          const fallbackWidth =
-            parseFloat(tableComputedStyle.borderRightWidth || "0") || 1;
-          line.style.setProperty("border-left-width", `${Math.max(1, fallbackWidth)}px`);
-          line.style.setProperty(
-            "border-left-style",
-            tableComputedStyle.borderRightStyle || "solid",
-          );
-          line.style.setProperty(
-            "border-left-color",
-            tableComputedStyle.borderRightColor || "#000",
-          );
-        }
+        const fallbackWidth = parseFloat(tableComputedStyle.borderRightWidth || "0") || 1;
+        const fallbackStyle = tableComputedStyle.borderRightStyle || "solid";
+        const fallbackColor = tableComputedStyle.borderRightColor || "#000";
 
-        line.style.setProperty("top", `${topOffset}px`);
-        line.style.setProperty("left", "auto");
-        line.style.setProperty("width", "0px");
-        line.style.setProperty("right", `${rightInset}px`);
-        line.style.setProperty("bottom", "auto");
-        line.style.setProperty("height", `${tableHeight}px`);
-        line.style.setProperty("max-height", "none");
-        line.style.setProperty("min-height", "0px");
-      });
+        // 阶段1：批量预读 offsetParent 坐标与内部线框的 border 状态
+        const lineTasks = rightEdgeLines.map((line) => {
+          const offsetParent = line.offsetParent as HTMLElement | null;
+          const offsetParentRect = (offsetParent || wrapper).getBoundingClientRect();
+          const lineComputedStyle = window.getComputedStyle(line);
+          const borderLeftWidth = parseFloat(lineComputedStyle.borderLeftWidth || "0");
+          const hasVisibleBorder =
+            Number.isFinite(borderLeftWidth) &&
+            borderLeftWidth > 0 &&
+            lineComputedStyle.borderLeftStyle !== "none";
+          
+          return {
+            line,
+            offsetParentRect,
+            hasVisibleBorder
+          };
+        });
+
+        const tableHeight = Math.max(0, Math.round(tableRect.height));
+
+        // 阶段2：集中写入修复样式
+        lineTasks.forEach(({ line, offsetParentRect, hasVisibleBorder }) => {
+          const topOffset = Math.max(0, Math.round(tableRect.top - offsetParentRect.top));
+          const rightInset = Math.max(0, Math.round(offsetParentRect.right - tableRect.right));
+
+          if (!hasVisibleBorder) {
+            line.style.setProperty("border-left-width", `${Math.max(1, fallbackWidth)}px`);
+            line.style.setProperty("border-left-style", fallbackStyle);
+            line.style.setProperty("border-left-color", fallbackColor);
+          }
+
+          line.style.setProperty("top", `${topOffset}px`);
+          line.style.setProperty("left", "auto");
+          line.style.setProperty("width", "0px");
+          line.style.setProperty("right", `${rightInset}px`);
+          line.style.setProperty("bottom", "auto");
+          line.style.setProperty("height", `${tableHeight}px`);
+          line.style.setProperty("max-height", "none");
+          line.style.setProperty("min-height", "0px");
+        });
+      }
     };
 
     // 通过二分查找自动高度文本可切分位置。
@@ -916,6 +934,20 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
         container.querySelectorAll("[data-print-wrapper][data-flow-id]"),
       ) as HTMLElement[];
 
+      // 提前基于页面来源分组并排序，极大降低 hasUnresolvedEarlierFlow 的遍历压力
+      // 原有实现为 O(N^2) (N 为全量 flowWrappers 数量)，若有10页、每页100元素，将进行 1000 * 1000 = 1,000,000 次遍历比对。
+      // 现在仅收集未分页的阻碍元素集合。
+      const unresolvedEarlierWrappersMap = new Map<number, HTMLElement[]>();
+      allFlowWrappers.forEach((w) => {
+        if (!w.hasAttribute("data-flow-paginated") && isProcessableFlowWrapper(w)) {
+          const originIndex = parseAttrNumber(w, "data-origin-page-index", 0);
+          if (!unresolvedEarlierWrappersMap.has(originIndex)) {
+            unresolvedEarlierWrappersMap.set(originIndex, []);
+          }
+          unresolvedEarlierWrappersMap.get(originIndex)!.push(w);
+        }
+      });
+
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
 
@@ -951,7 +983,16 @@ export const createPagination = ({ store }: { store: DesignerStore }) => {
 
           // 后续流式元素必须等待前序流式元素完整分页并收敛，
           // 否则会先生成一批过时拆分页块，前序表格扩展后就可能互相重叠。
-          if (hasUnresolvedEarlierFlow(wrapper, allFlowWrappers)) return;
+          const currentOrigin = parseAttrNumber(wrapper, "data-origin-page-index", 0);
+          const unresolvedCandidates = unresolvedEarlierWrappersMap.get(currentOrigin);
+          if (unresolvedCandidates && unresolvedCandidates.some((candidate) => {
+            if (candidate === wrapper) return false;
+            if (candidate.getAttribute("data-flow-id") === wrapper.getAttribute("data-flow-id")) return false;
+            if (compareWrappersByOriginalTop(candidate, wrapper) >= 0) return false;
+            return true;
+          })) {
+            return;
+          }
 
           // 解除高度限制：允许包装元素随内容自适应展开。
           wrapper.style.height = "auto";

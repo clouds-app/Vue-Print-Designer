@@ -15,6 +15,7 @@ import Preview from "~icons/material-symbols/preview";
 import HtmlIcon from "~icons/material-symbols/html";
 import FilePdf from "~icons/material-symbols/picture-as-pdf";
 import Image from "~icons/material-symbols/image";
+import Loading from "@/components/common/LoadingIcon.vue";
 import ZoomIn from "~icons/material-symbols/zoom-in";
 import ZoomOut from "~icons/material-symbols/zoom-out";
 import PanTool from "~icons/material-symbols/pan-tool";
@@ -252,7 +253,6 @@ const {
   modalLanguage,
   canSaveJson,
   isJsonReadOnly,
-  handleViewJson,
   handleViewImageBlob,
   handleViewPdfBlob,
   handleSaveJson,
@@ -1270,63 +1270,99 @@ const openSettingsPanel = () => {
 };
 
 const handlePreview = async () => {
-  try {
+    if (store.isGeneratingPreview) return;
+    store.isGeneratingPreview = true;
+    try {
+      const pages = Array.from(
+        getQueryRoot().querySelectorAll(".print-page"),
+      ) as HTMLElement[];
+      previewContent.value = await getPrintHtml(pages);
+      showPreview.value = true;
+    } catch (e) {
+      console.error(e);
+      toast.error("Preview generation failed");
+    } finally {
+      store.isGeneratingPreview = false;
+    }
+  };
+  
+  const handlePrint = async () => {
+    // Use real DOM elements to ensure computed styles are captured correctly, similar to exportPdf
     const pages = Array.from(
       getQueryRoot().querySelectorAll(".print-page"),
     ) as HTMLElement[];
-    previewContent.value = await getPrintHtml(pages);
-    showPreview.value = true;
-  } catch (e) {
-    console.error(e);
-    toast.error("Preview generation failed");
-  }
-};
-
-const handlePrint = async () => {
-  // Use real DOM elements to ensure computed styles are captured correctly, similar to exportPdf
-  const pages = Array.from(
-    getQueryRoot().querySelectorAll(".print-page"),
-  ) as HTMLElement[];
-  if (printMode.value !== "browser" && !silentPrint.value) {
-    pendingPrintContent.value = pages;
-    showPrintDialog.value = true;
-    return;
-  }
-  await print(pages, { mode: printModeValue.value });
-};
-
-const handlePrintConfirm = async (options: PrintOptions) => {
-  if (printMode.value === "local") {
-    Object.assign(localPrintOptions, options);
-  }
-  if (printMode.value === "remote") {
-    Object.assign(remotePrintOptions, options);
-  }
-
-  const content =
-    pendingPrintContent.value ||
-    (Array.from(
-      getQueryRoot().querySelectorAll(".print-page"),
-    ) as HTMLElement[]);
-  pendingPrintContent.value = null;
-  showPrintDialog.value = false;
-  await print(content, { mode: printModeValue.value, options });
-};
-
-const handleExport = async () => {
-  const baseName = getExportBaseName();
-  await exportPdf(undefined, `${baseName}.pdf`);
-};
-
-const handleExportHtmlBtn = async () => {
-  const baseName = getExportBaseName();
-  await exportHtml(undefined, `${baseName}.html`);
-};
-
-const handleExportImages = async () => {
-  const baseName = getExportBaseName();
-  await exportImages(undefined, baseName);
-};
+    if (printMode.value !== "browser" && !silentPrint.value) {
+      pendingPrintContent.value = pages;
+      showPrintDialog.value = true;
+      return;
+    }
+    
+    if (store.isGeneratingPrint) return;
+    store.isGeneratingPrint = true;
+    try {
+      await print(pages, { mode: printModeValue.value });
+    } finally {
+      store.isGeneratingPrint = false;
+    }
+  };
+  
+  const handlePrintConfirm = async (options: PrintOptions) => {
+    if (printMode.value === "local") {
+      Object.assign(localPrintOptions, options);
+    }
+    if (printMode.value === "remote") {
+      Object.assign(remotePrintOptions, options);
+    }
+  
+    const content =
+      pendingPrintContent.value ||
+      (Array.from(
+        getQueryRoot().querySelectorAll(".print-page"),
+      ) as HTMLElement[]);
+    pendingPrintContent.value = null;
+    showPrintDialog.value = false;
+    
+    if (store.isGeneratingPrint) return;
+    store.isGeneratingPrint = true;
+    try {
+      await print(content, { mode: printModeValue.value, options });
+    } finally {
+      store.isGeneratingPrint = false;
+    }
+  };
+  
+  const handleExport = async () => {
+    if (store.isGeneratingPdf) return;
+    store.isGeneratingPdf = true;
+    try {
+      const baseName = getExportBaseName();
+      await exportPdf(undefined, `${baseName}.pdf`);
+    } finally {
+      store.isGeneratingPdf = false;
+    }
+  };
+  
+  const handleExportHtmlBtn = async () => {
+    if (store.isGeneratingHtml) return;
+    store.isGeneratingHtml = true;
+    try {
+      const baseName = getExportBaseName();
+      await exportHtml(undefined, `${baseName}.html`);
+    } finally {
+      store.isGeneratingHtml = false;
+    }
+  };
+  
+  const handleExportImages = async () => {
+    if (store.isGeneratingImages) return;
+    store.isGeneratingImages = true;
+    try {
+      const baseName = getExportBaseName();
+      await exportImages(undefined, baseName);
+    } finally {
+      store.isGeneratingImages = false;
+    }
+  };
 
 const handleSave = () => {
   if (templateStore.currentTemplateId) {
@@ -1389,11 +1425,6 @@ const handleExportImagesEvent = (e: Event) => {
   handleExportImages();
 };
 
-const handleViewJsonEvent = (e: Event) => {
-  if (!isEventForCurrentDesigner(e)) return;
-  handleViewJson();
-};
-
 const handleViewImageBlobEvent = (e: Event) => {
   if (!isEventForCurrentDesigner(e)) return;
   handleViewImageBlob();
@@ -1441,7 +1472,6 @@ onMounted(() => {
   window.addEventListener("designer:export-pdf", handleExportEvent);
   window.addEventListener("designer:export-html", handleExportHtmlEvent);
   window.addEventListener("designer:export-images", handleExportImagesEvent);
-  window.addEventListener("designer:view-json", handleViewJsonEvent);
   window.addEventListener("designer:view-blob", handleViewImageBlobEvent);
   window.addEventListener("designer:view-pdf-blob", handleViewPdfBlobEvent);
   window.addEventListener(
@@ -1502,7 +1532,6 @@ onUnmounted(() => {
   window.removeEventListener("designer:export-pdf", handleExportEvent);
   window.removeEventListener("designer:export-html", handleExportHtmlEvent);
   window.removeEventListener("designer:export-images", handleExportImagesEvent);
-  window.removeEventListener("designer:view-json", handleViewJsonEvent);
   window.removeEventListener("designer:view-blob", handleViewImageBlobEvent);
   window.removeEventListener("designer:view-pdf-blob", handleViewPdfBlobEvent);
   window.removeEventListener(
@@ -2180,29 +2209,36 @@ onUnmounted(() => {
         >
           <button
             @click="handleExport"
-            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            :disabled="store.isGeneratingPdf"
+            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :title="t('editor.exportPdf')"
           >
-            <FilePdf class="w-4 h-4" />
+            <Loading v-if="store.isGeneratingPdf" class="w-4 h-4 animate-spin" />
+            <FilePdf v-else class="w-4 h-4" />
           </button>
           <button
             @click="handleExportHtmlBtn"
-            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            :disabled="store.isGeneratingHtml"
+            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :title="t('editor.exportHtml')"
           >
-            <HtmlIcon class="w-4 h-4" />
+            <Loading v-if="store.isGeneratingHtml" class="w-4 h-4 animate-spin" />
+            <HtmlIcon v-else class="w-4 h-4" />
           </button>
           <button
             @click="handleExportImages"
-            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            :disabled="store.isGeneratingImages"
+            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :title="t('editor.exportImage')"
           >
-            <Image class="w-4 h-4" />
+            <Loading v-if="store.isGeneratingImages" class="w-4 h-4 animate-spin" />
+            <Image v-else class="w-4 h-4" />
           </button>
           <div class="w-px h-4 bg-gray-300 dark:bg-gray-700 mx-1"></div>
           <button
             @click="handlePreview"
-            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            :disabled="store.isGeneratingPreview"
+            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :title="
               t('editor.preview') +
               ' (' +
@@ -2210,16 +2246,19 @@ onUnmounted(() => {
               ')'
             "
           >
-            <Preview class="w-4 h-4" />
+            <Loading v-if="store.isGeneratingPreview" class="w-4 h-4 animate-spin" />
+            <Preview v-else class="w-4 h-4" />
           </button>
           <button
             @click="handlePrint"
-            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+            :disabled="store.isGeneratingPrint"
+            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :title="
               t('editor.print') + ' (' + formatShortcut(['Ctrl', 'P']) + ')'
             "
           >
-            <Printer class="w-4 h-4" />
+            <Loading v-if="store.isGeneratingPrint" class="w-4 h-4 animate-spin" />
+            <Printer v-else class="w-4 h-4" />
           </button>
         </div>
 
@@ -2410,7 +2449,7 @@ onUnmounted(() => {
 
           <div
             v-if="showZoomSettings"
-            class="fixed w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-lg p-4 z-[2000] pointer-events-auto"
+            class="fixed w-64 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-xl p-4 z-[2000] pointer-events-auto"
             :style="zoomSettingsMenuStyle"
             @click.stop
           >

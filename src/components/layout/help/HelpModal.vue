@@ -77,8 +77,8 @@ const projectName = startCase(pkg.name);
         class="bg-white rounded-lg shadow-xl w-[700px] max-w-full h-[500px] flex overflow-hidden"
       >
         <!-- Sidebar Tabs -->
-        <div class="w-48 bg-gray-50 border-r border-gray-200 flex flex-col">
-          <div class="h-14 flex items-center px-4 border-b border-gray-200">
+        <div class="w-48 bg-gray-50 border-r border-gray-200 flex flex-col shrink-0">
+          <div class="flex items-center px-4 py-3 border-b border-gray-200 shrink-0">
             <h3 class="text-base font-semibold text-gray-800">
               {{ t("help.title") }}
             </h3>
@@ -114,7 +114,7 @@ const projectName = startCase(pkg.name);
         <!-- Content Area -->
         <div class="flex-1 flex flex-col min-w-0">
           <div
-            class="h-14 flex items-center justify-between px-4 border-b border-gray-200"
+            class="flex items-center justify-between px-4 py-3 border-b border-gray-200 shrink-0"
           >
             <h3 class="text-base font-semibold text-gray-800">
               {{

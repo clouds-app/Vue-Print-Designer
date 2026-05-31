@@ -443,6 +443,19 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
     const sharedStyleCache = createCloneStyleCache();
     pages.forEach((page, idx) => {
       const clone = cloneElementWithStyles(page, getComputedStyleFn, sharedStyleCache);
+
+      // 修复：原生 cloneNode 无法克隆 Canvas 内容，导致图表/条形码等打印空白
+      const originalCanvases = Array.from(page.querySelectorAll ? page.querySelectorAll("canvas") : []);
+      if (originalCanvases.length > 0) {
+        const clonedCanvases = Array.from(clone.querySelectorAll("canvas"));
+        originalCanvases.forEach((orig, i) => {
+          const cClone = clonedCanvases[i] as HTMLCanvasElement;
+          cClone.width = (orig as HTMLCanvasElement).width;
+          cClone.height = (orig as HTMLCanvasElement).height;
+          const ctx = cClone.getContext("2d");
+          if (ctx) ctx.drawImage(orig as HTMLCanvasElement, 0, 0);
+        });
+      }
       
       clone.style.position = "absolute";
       clone.style.left = "0";
@@ -451,6 +464,15 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
       clone.style.height = `${height}px`;
       clone.style.transform = "none";
       clone.style.backgroundColor = store.canvasBackground;
+
+      // ── 关键修复：在 clone 挂入 live DOM 之前完成 cleanElement ────────────────────
+      // cleanElement 是递归函数，会访问整棵树的每一个节点并调用多次 classList.remove。
+      // 对 200 行 × 10 列表格（2000+ 元素），每次调用产生 ~16000 次样式失效事件。
+      // 若在 container.appendChild(clone) 之后调用，这些失效会堆积到 live DOM 上，
+      // 紧随其后的 getBoundingClientRect()（SVG 尺寸修复）会强制 flush 全部失效，
+      // 造成一次代价极高的强制全局重排。
+      // cleanElement 只读写 inline style 和 classList，不依赖 DOM 挂载，可安全离线执行。
+      cleanElement(clone);
 
       container.appendChild(clone);
 
@@ -466,25 +488,36 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
         const id = wrapper.getAttribute("data-element-id");
         if (id) wrapperById.set(id, wrapper);
       });
-      wrappers.forEach((w, wrapperIndex) => {
+
+      // 阶段1：批量只读并标记
+      const wrapperTasks = wrappers.map((w, wrapperIndex) => {
         const el = w as HTMLElement;
 
         if (inlineEmbeddedWrapperIntoTableCell(el, wrapperById)) {
-          return;
+          return null;
         }
 
         if (isWrapperFullyOutsideCanvas(el, width, height)) {
           el.remove();
-          return;
+          return null;
         }
 
-        el.setAttribute("data-print-wrapper", "true");
         const top = parseFloat(el.style.top || "");
         const elHeight = parseFloat(el.style.height || "");
         const resolvedTop = Number.isFinite(top) ? top : 0;
         const resolvedHeight = Number.isFinite(elHeight)
           ? elHeight
           : el.getBoundingClientRect().height;
+
+        return { el, resolvedTop, resolvedHeight, wrapperIndex };
+      }).filter(Boolean);
+
+      // 阶段2：集中写入DOM属性，避免 Layout Thrashing
+      wrapperTasks.forEach((task) => {
+        if (!task) return;
+        const { el, resolvedTop, resolvedHeight, wrapperIndex } = task;
+
+        el.setAttribute("data-print-wrapper", "true");
         el.setAttribute("data-original-top", `${resolvedTop}`);
         el.setAttribute("data-original-height", `${resolvedHeight}`);
         el.setAttribute("data-origin-page-index", `${idx}`);
@@ -525,14 +558,18 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
         }
       });
 
-      cleanElement(clone);
-
-      const svgs = clone.querySelectorAll("svg");
-      svgs.forEach((svg) => {
-        const rect = svg.getBoundingClientRect();
+      // cleanElement 已在 appendChild 之前调用（见上方注释），此处删除重复调用。
+      const svgs = Array.from(clone.querySelectorAll("svg"));
+      // 阶段1：批量只读 SVG 尺寸，避免在写入 width/height 后引起 Layout Thrashing
+      const svgTasks = svgs.map((svg) => ({
+        svg,
+        rect: svg.getBoundingClientRect(),
+        w: svg.getAttribute("width"),
+        h: svg.getAttribute("height")
+      }));
+      // 阶段2：批量写入修正样式
+      svgTasks.forEach(({ svg, rect, w, h }) => {
         if (rect.width === 0 || rect.height === 0) {
-          const w = svg.getAttribute("width");
-          const h = svg.getAttribute("height");
           if (w) svg.style.width = w.includes("px") ? w : `${w}px`;
           if (h) svg.style.height = h.includes("px") ? h : `${h}px`;
         }
@@ -630,6 +667,9 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
 
     // 所有页共享同一个 XMLSerializer，避免每页重复构造。
     const serializer = new XMLSerializer();
+    
+    // 修复：使用 Promise 作为缓存，解决同批次(batch)并发执行时引发的缓存击穿（Cache Stampede）和网络请求重复问题
+    const externalImageCache = new Map<string, Promise<string>>();
 
     try {
       // 渲染单页为图片数据。
@@ -670,14 +710,20 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
             externalImgs.map(async (img) => {
               const src = img.src;
               try {
-                const res = await fetch(src);
-                const blob = await res.blob();
-                const reader = new FileReader();
-                await new Promise<void>((resolve) => {
-                  reader.onloadend = () => resolve();
-                  reader.readAsDataURL(blob);
-                });
-                img.src = reader.result as string;
+                if (!externalImageCache.has(src)) {
+                  // 存入 Promise 占位，同批次其他页直接 await 这个共享 Promise
+                  const fetchPromise = (async () => {
+                    const res = await fetch(src);
+                    const blob = await res.blob();
+                    return new Promise<string>((resolve) => {
+                      const reader = new FileReader();
+                      reader.onloadend = () => resolve(reader.result as string);
+                      reader.readAsDataURL(blob);
+                    });
+                  })();
+                  externalImageCache.set(src, fetchPromise);
+                }
+                img.src = await externalImageCache.get(src)!;
               } catch (e) {
                 console.warn("[Render Debug] Inline image failed", src, e);
                 // 失败必须替换为空白 base64，否则 SVG 使用跨域 HTTP url 绘制进 Canvas 必报 Tainted SecurityError
@@ -717,7 +763,10 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
 
         return new Promise<string>((resolve, reject) => {
           const img = new Image();
-          img.onload = () => {
+          img.onload = async () => {
+            // 切分微任务/宏任务：防止并发 batch 引发多个 toDataURL 在同一事件循环触发导致连续卡顿
+            await new Promise((r) => setTimeout(r, 0));
+
             const canvas = document.createElement("canvas");
             canvas.width = width * scale;
             canvas.height = height * scale;
@@ -747,10 +796,13 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
         });
       };
 
-      const batchSize = 3;
+      const batchSize = 3; // 恢复批次并行
       const pageImages: string[] = [];
 
       for (let i = 0; i < pages.length; i += batchSize) {
+        // 主动出让主线程给上一批次可能的剩余副作用或 UI 渲染
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
         const batchStart = performance.now();
         const batch = pages.slice(i, i + batchSize);
         const results = await Promise.all(
@@ -826,10 +878,14 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
       const pageImages = await generatePageImages(container, width, height);
 
       const addImagesStart = performance.now();
-      pageImages.forEach((imgData, i) => {
+      for (let i = 0; i < pageImages.length; i++) {
+        if (i % 3 === 0) {
+          // 每添加几页主动释放主线程，防止 base64 解析引起长时间卡顿
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
         if (i > 0) pdf.addPage([widthMm, heightMm]);
-        pdf.addImage(imgData, "JPEG", 0, 0, widthMm, heightMm);
-      });
+        pdf.addImage(pageImages[i], "JPEG", 0, 0, widthMm, heightMm);
+      }
       if (store.showRenderDebugLogs) {
         console.log(`[Render Debug] addImage to PDF took ${(performance.now() - addImagesStart).toFixed(2)}ms`);
       }

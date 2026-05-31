@@ -823,7 +823,7 @@ const modalTitle = computed(() => {
 
       <div
         v-if="isOpen"
-        class="fixed w-[260px] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-[1999] flex flex-col pointer-events-auto"
+        class="fixed w-[260px] bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 z-[1999] flex flex-col pointer-events-auto"
         :style="dropdownMenuStyle"
         @click.stop
       >

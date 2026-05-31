@@ -753,7 +753,7 @@ const closePropertiesPanel = () => {
   >
     <!-- Header -->
     <div
-      class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none"
+      class="relative p-4 pr-20 min-h-[72px] border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-move select-none rounded-t"
       data-floating-panel-drag-handle="true"
     >
       <div class="min-w-0">
@@ -1329,17 +1329,5 @@ const closePropertiesPanel = () => {
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #e5e7eb;
-  border-radius: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #d1d5db;
-}
+  /* custom-scrollbar inherited from global style.css */
 </style>

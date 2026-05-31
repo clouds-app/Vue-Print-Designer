@@ -201,7 +201,7 @@ export interface ListContextMenuConfig {
   items: ListContextMenuItem[];
 }
 
-export type TemplateMenuActionKey = "edit" | "copy" | "delete" | "testData";
+export type TemplateMenuActionKey = "edit" | "copy" | "delete" | "testData" | "viewJson";
 
 export type TemplateModalMode = "create" | "edit" | "copy";
 export type TemplateModalFieldType =
@@ -368,6 +368,11 @@ export interface DesignerState {
   clipboard: PrintElement[];
   copiedPage?: Page | null;
   isExporting?: boolean;
+  isGeneratingPreview?: boolean;
+  isGeneratingPrint?: boolean;
+  isGeneratingPdf?: boolean;
+  isGeneratingHtml?: boolean;
+  isGeneratingImages?: boolean;
   disableGlobalShortcuts?: boolean;
   disableShortcutsCount?: number;
   clientUrl?: string;

@@ -146,10 +146,86 @@ export const useTemplateStore = defineStore("templates", {
     templates: [] as Template[],
     templateDetailCache: {} as Record<string, any>,
     currentTemplateId: null as string | null,
+    lastSavedStateString: null as string | null,
     isSaving: false,
     isLoading: false,
   }),
+  getters: {
+    hasUnsavedChanges(): boolean {
+      if (!this.currentTemplateId) return true;
+      if (!this.lastSavedStateString) return true;
+      
+      const designerStore = useDesignerStore();
+      const currentString = JSON.stringify({
+        pages: designerStore.pages,
+        canvasSize: designerStore.canvasSize,
+        guides: designerStore.guides,
+        zoom: designerStore.zoom,
+        showGrid: designerStore.showGrid,
+        allowDragOutsideCanvas: designerStore.allowDragOutsideCanvas,
+        headerHeight: designerStore.headerHeight,
+        footerHeight: designerStore.footerHeight,
+        showHeaderLine: designerStore.showHeaderLine,
+        showFooterLine: designerStore.showFooterLine,
+        enableHeaderFooterLineRendering: designerStore.enableHeaderFooterLineRendering,
+        headerLineStyle: designerStore.headerLineStyle,
+        footerLineStyle: designerStore.footerLineStyle,
+        headerLineColor: designerStore.headerLineColor,
+        footerLineColor: designerStore.footerLineColor,
+        headerLineWidth: designerStore.headerLineWidth,
+        footerLineWidth: designerStore.footerLineWidth,
+        headerLineSpanMode: designerStore.headerLineSpanMode,
+        footerLineSpanMode: designerStore.footerLineSpanMode,
+        headerLineSpan: designerStore.headerLineSpan,
+        footerLineSpan: designerStore.footerLineSpan,
+        showMinimap: designerStore.showMinimap,
+        showHistoryPanel: designerStore.showHistoryPanel,
+        canvasBackground: designerStore.canvasBackground,
+        pageSpacingX: designerStore.pageSpacingX,
+        pageSpacingY: designerStore.pageSpacingY,
+        unit: designerStore.unit,
+        watermark: designerStore.watermark,
+        testData: designerStore.testData || {},
+      });
+      return currentString !== this.lastSavedStateString;
+    }
+  },
   actions: {
+    updateLastSavedStateString() {
+      const designerStore = useDesignerStore();
+      this.lastSavedStateString = JSON.stringify({
+        pages: designerStore.pages,
+        canvasSize: designerStore.canvasSize,
+        guides: designerStore.guides,
+        zoom: designerStore.zoom,
+        showGrid: designerStore.showGrid,
+        allowDragOutsideCanvas: designerStore.allowDragOutsideCanvas,
+        headerHeight: designerStore.headerHeight,
+        footerHeight: designerStore.footerHeight,
+        showHeaderLine: designerStore.showHeaderLine,
+        showFooterLine: designerStore.showFooterLine,
+        enableHeaderFooterLineRendering: designerStore.enableHeaderFooterLineRendering,
+        headerLineStyle: designerStore.headerLineStyle,
+        footerLineStyle: designerStore.footerLineStyle,
+        headerLineColor: designerStore.headerLineColor,
+        footerLineColor: designerStore.footerLineColor,
+        headerLineWidth: designerStore.headerLineWidth,
+        footerLineWidth: designerStore.footerLineWidth,
+        headerLineSpanMode: designerStore.headerLineSpanMode,
+        footerLineSpanMode: designerStore.footerLineSpanMode,
+        headerLineSpan: designerStore.headerLineSpan,
+        footerLineSpan: designerStore.footerLineSpan,
+        showMinimap: designerStore.showMinimap,
+        showHistoryPanel: designerStore.showHistoryPanel,
+        canvasBackground: designerStore.canvasBackground,
+        pageSpacingX: designerStore.pageSpacingX,
+        pageSpacingY: designerStore.pageSpacingY,
+        unit: designerStore.unit,
+        watermark: designerStore.watermark,
+        testData: designerStore.testData || {},
+      });
+    },
+
     setCrudScopeId(scopeId: string) {
       this.crudScopeId = String(scopeId || "").trim() || "__global__";
     },
@@ -460,6 +536,8 @@ export const useTemplateStore = defineStore("templates", {
               await this.loadTemplates();
             }
 
+            this.updateLastSavedStateString();
+
             return;
           } catch (e) {
             console.error("Failed to save template", e);
@@ -488,6 +566,11 @@ export const useTemplateStore = defineStore("templates", {
           this.createTemplate(name, data);
         }
         this.saveToLocalStorage();
+        
+        this.updateLastSavedStateString();
+
+        // Add a brief artificial delay so the UI loading state is visible to the user during fast local saves
+        await new Promise(resolve => setTimeout(resolve, 300));
       } finally {
         this.isSaving = false;
         if (mode === "remote" && !isAutoSave) {
@@ -1048,6 +1131,9 @@ export const useTemplateStore = defineStore("templates", {
                 }) as Template,
               );
             }
+            
+            this.updateLastSavedStateString();
+            
             return;
           } catch (e) {
             console.error("Failed to load template", e);
@@ -1152,6 +1238,8 @@ export const useTemplateStore = defineStore("templates", {
           designerStore.historyFutureActionKeys = [];
 
           this.currentTemplateId = t.id || id;
+
+          this.updateLastSavedStateString();
         }
       } finally {
         setTimeout(() => {

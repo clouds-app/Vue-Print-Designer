@@ -494,7 +494,7 @@ onUnmounted(() => {
 
       <div
         v-if="showPaperSettings"
-        class="fixed w-64 max-h-[calc(100vh-56px)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-lg z-[2000] pointer-events-auto flex flex-col overflow-hidden"
+        class="fixed w-64 max-h-[calc(100vh-56px)] bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-xl z-[2000] pointer-events-auto flex flex-col overflow-hidden"
         :style="paperSettingsMenuStyle"
         @click.stop
       >
@@ -946,7 +946,7 @@ onUnmounted(() => {
           class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[560px] max-w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700"
         >
           <div
-            class="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700 shrink-0"
+            class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0"
           >
             <h3
               class="text-base font-semibold text-gray-800 dark:text-gray-200"
@@ -1579,12 +1579,13 @@ onUnmounted(() => {
           </div>
 
           <div
-            class="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-end"
+            class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-end shrink-0 rounded-b-lg"
           >
             <button
               @click="showHeaderFooterLineSettings = false"
-              class="px-3 py-1.5 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-xs font-medium"
+              class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 border border-red-200 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs transition-colors"
             >
+              <X class="w-4 h-4 shrink-0" />
               {{ t("common.close") }}
             </button>
           </div>
@@ -1602,7 +1603,7 @@ onUnmounted(() => {
           class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[640px] max-w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200 dark:border-gray-700"
         >
           <div
-            class="h-14 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700 shrink-0"
+            class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 shrink-0"
           >
             <h3
               class="text-base font-semibold text-gray-800 dark:text-gray-200"
@@ -1752,12 +1753,13 @@ onUnmounted(() => {
           </div>
 
           <div
-            class="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-end"
+            class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex justify-end shrink-0 rounded-b-lg"
           >
             <button
               @click="showAdvancedSettings = false"
-              class="px-3 py-1.5 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-xs font-medium"
+              class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 border border-red-200 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs transition-colors"
             >
+              <X class="w-4 h-4 shrink-0" />
               {{ t("common.close") }}
             </button>
           </div>
