@@ -483,16 +483,40 @@ const handleToolbarGroupDragEnd = () => {
   hoverToolbarGroup.value = null;
 };
 
+const isToolbarPointerDownInside = (e: Event) => {
+  const root = toolbarRootRef.value;
+  if (!root) return false;
+
+  // In shadow DOM, window-level listeners may receive a retargeted host.
+  // Prefer composedPath to reliably detect interactions from inside toolbar.
+  if (typeof e.composedPath === "function") {
+    const path = e.composedPath();
+    if (path.includes(root)) return true;
+  }
+
+  const target = e.target;
+  if (target instanceof Node && root.contains(target)) return true;
+
+  // Fallback for environments where composedPath is incomplete.
+  if (e instanceof PointerEvent) {
+    const rect = root.getBoundingClientRect();
+    if (
+      e.clientX >= rect.left &&
+      e.clientX <= rect.right &&
+      e.clientY >= rect.top &&
+      e.clientY <= rect.bottom
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const handleToolbarReorderOutsidePointerDown = (e: Event) => {
   if (!isToolbarGroupReorderMode.value) return;
 
-  const target = e.target;
-  if (!(target instanceof Node)) {
-    exitToolbarGroupReorderMode();
-    return;
-  }
-
-  if (toolbarRootRef.value?.contains(target)) return;
+  if (isToolbarPointerDownInside(e)) return;
   exitToolbarGroupReorderMode();
 };
 
@@ -2587,31 +2611,3 @@ onUnmounted(() => {
     @save="handleSaveJson"
   />
 </template>
-
-<style scoped>
-@keyframes toolbar-tremble {
-  0% { transform: rotate(0) translate(0, 0); }
-  25% { transform: rotate(-0.5deg) translate(-1px, 0); }
-  50% { transform: rotate(0.5deg) translate(1px, 0); }
-  75% { transform: rotate(-0.5deg) translate(-1px, 0); }
-  100% { transform: rotate(0) translate(0, 0); }
-}
-
-.toolbar-reorder-group.toolbar-reorder-mode {
-  animation: toolbar-tremble 1.2s infinite ease-in-out;
-  cursor: grab;
-  border: 1px dashed var(--brand-500);
-  border-radius: 0;
-}
-
-.toolbar-reorder-group.toolbar-reorder-dragging {
-  opacity: 0.5;
-  animation: none;
-  cursor: grabbing;
-}
-
-.toolbar-reorder-group.toolbar-reorder-target {
-  box-shadow: 0 0 0 2px var(--brand-600) inset;
-  border-radius: 0;
-}
-</style>

@@ -255,3 +255,30 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Toolbar reorder mode styles must be global so WC shadow root receives them. */
+@keyframes toolbar-tremble {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(0, -1px); }
+  50% { transform: translate(0, 1px); }
+  75% { transform: translate(0, -1px); }
+  100% { transform: translate(0, 1px); }
+}
+
+.toolbar-reorder-group.toolbar-reorder-mode {
+  animation: toolbar-tremble 0.9s infinite linear;
+  cursor: grab;
+  border: 1px dashed var(--brand-500);
+  border-radius: 0;
+}
+
+.toolbar-reorder-group.toolbar-reorder-dragging {
+  opacity: 0.5;
+  animation: none;
+  cursor: grabbing;
+}
+
+.toolbar-reorder-group.toolbar-reorder-target {
+  box-shadow: 0 0 0 2px var(--brand-600) inset;
+  border-radius: 0;
+}
