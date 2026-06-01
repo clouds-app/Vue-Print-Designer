@@ -59,6 +59,7 @@ export default {
     },
   },
   editor: {
+    toolbarReorder: "ツールバー並び替え",
     preview: "印刷プレビュー",
     exportPdf: "PDF をエクスポート",
     exportHtml: "HTML をエクスポート",

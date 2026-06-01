@@ -83,6 +83,7 @@ import { useTemplateStore } from "@/stores/templates";
 import CodeEditorModal from "@/components/common/CodeEditorModal.vue";
 import { useI18n } from "vue-i18n";
 import { formatShortcut } from "@/utils/os";
+import { createFontGroups } from "@/utils/fonts";
 import { toast } from "@/utils/toast";
 import PrintDialog from "../PrintDialog.vue";
 
@@ -253,6 +254,7 @@ const {
   modalLanguage,
   canSaveJson,
   isJsonReadOnly,
+  handleViewJson,
   handleViewImageBlob,
   handleViewPdfBlob,
   handleSaveJson,
@@ -815,6 +817,30 @@ const canSelectAllCurrentPage = computed(() => {
   return store.pages.some((page) => page.elements.length > 0);
 });
 
+const isAllElementsSelected = computed(() => {
+  const totalElements = store.pages.reduce(
+    (count, page) => count + page.elements.length,
+    0,
+  );
+
+  if (totalElements === 0) return false;
+  if (store.selectedElementIds.length !== totalElements) return false;
+
+  const selectedSet = new Set(store.selectedElementIds);
+  if (selectedSet.size !== totalElements) return false;
+
+  return store.pages.every((page) =>
+    page.elements.every((element) => selectedSet.has(element.id)),
+  );
+});
+
+const selectAllButtonTitle = computed(() => {
+  const actionLabel = isAllElementsSelected.value
+    ? `${t("common.cancel")} ${t("common.selectAll")}`
+    : t("common.selectAll");
+  return `${actionLabel} (${formatShortcut(["Ctrl", "A"])})`;
+});
+
 const canMergeSelectedTableCells = computed(() => {
   const selection = store.tableSelection;
   const element = selectedTableSelectionElement.value;
@@ -845,6 +871,11 @@ const canSplitSelectedTableCell = computed(() => {
 });
 
 const handleSelectAll = () => {
+  if (isAllElementsSelected.value) {
+    store.clearSelection();
+    return;
+  }
+
   store.selectAllElements();
 };
 
@@ -1026,88 +1057,7 @@ const handleLayerMove = (mode: "front" | "back" | "forward" | "backward") => {
   store.moveElementsLayer(ids, "front");
 };
 
-type FontOption = {
-  label: string;
-  value: string;
-};
-
-type FontGroup = {
-  label: string;
-  options: FontOption[];
-};
-
-const defaultFontGroups = computed<FontGroup[]>(() => [
-  {
-    label: t("editor.fontGroups.common"),
-    options: [{ label: t("editor.fonts.default"), value: "" }],
-  },
-  {
-    label: t("editor.fontGroups.chinese"),
-    options: [
-      {
-        label: t("editor.fonts.microsoftYaHei"),
-        value: '"Microsoft YaHei", "微软雅黑", sans-serif',
-      },
-      {
-        label: t("editor.fonts.pingFangSC"),
-        value: '"PingFang SC", "Microsoft YaHei", sans-serif',
-      },
-      { label: t("editor.fonts.simSun"), value: "SimSun, serif" },
-      { label: t("editor.fonts.simHei"), value: "SimHei, sans-serif" },
-      { label: t("editor.fonts.kaiTi"), value: "KaiTi, STKaiti, serif" },
-      {
-        label: t("editor.fonts.fangSong"),
-        value: "FangSong, STFangsong, serif",
-      },
-      { label: t("editor.fonts.dengXian"), value: "DengXian, sans-serif" },
-    ],
-  },
-  {
-    label: t("editor.fontGroups.western"),
-    options: [
-      { label: t("editor.fonts.arial"), value: "Arial, sans-serif" },
-      {
-        label: t("editor.fonts.timesNewRoman"),
-        value: '"Times New Roman", serif',
-      },
-      { label: t("editor.fonts.verdana"), value: "Verdana, sans-serif" },
-      { label: t("editor.fonts.georgia"), value: "Georgia, serif" },
-      { label: t("editor.fonts.tahoma"), value: "Tahoma, sans-serif" },
-    ],
-  },
-  {
-    label: t("editor.fontGroups.monospace"),
-    options: [
-      {
-        label: t("editor.fonts.courierNew"),
-        value: '"Courier New", monospace',
-      },
-    ],
-  },
-]);
-
-const fontGroups = computed<FontGroup[]>(() => {
-  const customOptions = store.fontOptions || [];
-  if (!customOptions.length) {
-    return defaultFontGroups.value;
-  }
-
-  const normalizedCustom = customOptions.map((opt) => ({
-    label: (opt.label || opt.value || "").trim(),
-    value: opt.value,
-  }));
-  const customFontGroup = {
-    label: t("editor.fontGroups.custom"),
-    options: normalizedCustom,
-  };
-  const hasDefaultOption = normalizedCustom.some((opt) => opt.value === "");
-
-  if (hasDefaultOption) {
-    return [customFontGroup];
-  }
-
-  return [...defaultFontGroups.value, customFontGroup];
-});
+const fontGroups = computed(() => createFontGroups(t, store.fontOptions));
 
 const handleZoomIn = () => {
   const currentPercent = Math.round(store.zoom * 100);
@@ -1435,6 +1385,20 @@ const handleViewPdfBlobEvent = (e: Event) => {
   handleViewPdfBlob();
 };
 
+const handleViewJsonEvent = (e: Event) => {
+  if (!isEventForCurrentDesigner(e)) return;
+  handleViewJson();
+};
+
+const handleToolbarReorderEvent = (e: Event) => {
+  if (!isEventForCurrentDesigner(e)) return;
+  if (!isToolbarGroupReorderMode.value) {
+    isToolbarGroupReorderMode.value = true;
+    draggingToolbarGroup.value = null;
+    hoverToolbarGroup.value = null;
+  }
+};
+
 const handleElementsPanelVisibilityEvent = (e: Event) => {
   if (!isEventForCurrentDesigner(e)) return;
   const visible = (e as CustomEvent)?.detail?.visible;
@@ -1472,6 +1436,11 @@ onMounted(() => {
   window.addEventListener("designer:export-pdf", handleExportEvent);
   window.addEventListener("designer:export-html", handleExportHtmlEvent);
   window.addEventListener("designer:export-images", handleExportImagesEvent);
+  window.addEventListener("designer:view-json", handleViewJsonEvent);
+  window.addEventListener(
+    "designer:toolbar-reorder",
+    handleToolbarReorderEvent,
+  );
   window.addEventListener("designer:view-blob", handleViewImageBlobEvent);
   window.addEventListener("designer:view-pdf-blob", handleViewPdfBlobEvent);
   window.addEventListener(
@@ -1532,6 +1501,11 @@ onUnmounted(() => {
   window.removeEventListener("designer:export-pdf", handleExportEvent);
   window.removeEventListener("designer:export-html", handleExportHtmlEvent);
   window.removeEventListener("designer:export-images", handleExportImagesEvent);
+  window.removeEventListener("designer:view-json", handleViewJsonEvent);
+  window.removeEventListener(
+    "designer:toolbar-reorder",
+    handleToolbarReorderEvent,
+  );
   window.removeEventListener("designer:view-blob", handleViewImageBlobEvent);
   window.removeEventListener("designer:view-pdf-blob", handleViewPdfBlobEvent);
   window.removeEventListener(
@@ -1570,7 +1544,7 @@ onUnmounted(() => {
 <template>
   <div
     ref="toolbarRootRef"
-    class="flex min-w-0 flex-1 items-stretch justify-end gap-0 text-gray-700 dark:text-gray-200"
+    class="flex min-w-0 flex-1 items-stretch justify-end gap-1 text-gray-700 dark:text-gray-200"
   >
     <div
       class="toolbar-reorder-group flex min-w-0 flex-1 items-stretch"
@@ -2033,10 +2007,15 @@ onUnmounted(() => {
           <button
             @click="handleSelectAll"
             :disabled="!canSelectAllCurrentPage"
-            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-            :title="
-              t('common.selectAll') + ' (' + formatShortcut(['Ctrl', 'A']) + ')'
-            "
+            :class="[
+              'p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed',
+              {
+                'bg-gray-300 dark:bg-gray-700 text-blue-700 dark:text-blue-400':
+                  isAllElementsSelected,
+              },
+            ]"
+            :title="selectAllButtonTitle"
+            :aria-pressed="isAllElementsSelected ? 'true' : 'false'"
           >
             <SelectAllIcon class="w-4 h-4" />
           </button>
@@ -2120,19 +2099,46 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div class="ml-1 flex shrink-0 items-center gap-1">
-        <div
-          v-if="!isToolbarOverflowing"
-          class="h-6 w-px bg-gray-300 dark:bg-gray-700"
-        ></div>
+    <!-- Paper Settings -->
+    <div
+      class="toolbar-reorder-group flex shrink-0 items-center gap-1"
+      :class="getToolbarGroupStateClass('paper')"
+      :style="getToolbarGroupStyle('paper')"
+      :draggable="isToolbarGroupReorderMode"
+      @dragstart="handleToolbarGroupDragStart($event, 'paper')"
+      @dragover="handleToolbarGroupDragOver($event, 'paper')"
+      @drop="handleToolbarGroupDrop($event, 'paper')"
+      @dragend="handleToolbarGroupDragEnd"
+      @mousedown.left="startToolbarGroupLongPress('paper')"
+      @mouseup="stopToolbarGroupLongPress"
+      @mouseleave="stopToolbarGroupLongPress"
+      @touchstart.passive="startToolbarGroupLongPress('paper')"
+      @touchend="stopToolbarGroupLongPress"
+      @touchcancel="stopToolbarGroupLongPress"
+    >
+      <div v-if="!isToolbarGroupFirst('paper') && !isToolbarOverflowing" class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
+      <PaperSettings :class="{ 'pointer-events-none select-none': isToolbarGroupReorderMode }" />
+    </div>
 
-        <!-- Paper Settings -->
-        <PaperSettings />
-
-        <div class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
-
-        <!-- Zoom Settings -->
-        <div class="relative" ref="zoomTriggerRef">
+    <!-- Zoom Settings -->
+    <div
+      class="toolbar-reorder-group flex shrink-0 items-center gap-1"
+      :class="getToolbarGroupStateClass('zoom')"
+      :style="getToolbarGroupStyle('zoom')"
+      :draggable="isToolbarGroupReorderMode"
+      @dragstart="handleToolbarGroupDragStart($event, 'zoom')"
+      @dragover="handleToolbarGroupDragOver($event, 'zoom')"
+      @drop="handleToolbarGroupDrop($event, 'zoom')"
+      @dragend="handleToolbarGroupDragEnd"
+      @mousedown.left="startToolbarGroupLongPress('zoom')"
+      @mouseup="stopToolbarGroupLongPress"
+      @mouseleave="stopToolbarGroupLongPress"
+      @touchstart.passive="startToolbarGroupLongPress('zoom')"
+      @touchend="stopToolbarGroupLongPress"
+      @touchcancel="stopToolbarGroupLongPress"
+    >
+      <div v-if="!isToolbarGroupFirst('zoom') && !isToolbarOverflowing" class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
+      <div class="relative" ref="zoomTriggerRef" :class="{ 'pointer-events-none select-none': isToolbarGroupReorderMode }">
           <div
             class="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1"
           >
@@ -2159,15 +2165,33 @@ onUnmounted(() => {
             </button>
           </div>
         </div>
+    </div>
 
-        <div class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
-
-        <div
-          class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1"
-        >
-          <button
-            @click="toggleHandPanMode"
-            class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
+    <!-- Hand Tool -->
+    <div
+      class="toolbar-reorder-group flex shrink-0 items-center gap-1"
+      :class="getToolbarGroupStateClass('hand')"
+      :style="getToolbarGroupStyle('hand')"
+      :draggable="isToolbarGroupReorderMode"
+      @dragstart="handleToolbarGroupDragStart($event, 'hand')"
+      @dragover="handleToolbarGroupDragOver($event, 'hand')"
+      @drop="handleToolbarGroupDrop($event, 'hand')"
+      @dragend="handleToolbarGroupDragEnd"
+      @mousedown.left="startToolbarGroupLongPress('hand')"
+      @mouseup="stopToolbarGroupLongPress"
+      @mouseleave="stopToolbarGroupLongPress"
+      @touchstart.passive="startToolbarGroupLongPress('hand')"
+      @touchend="stopToolbarGroupLongPress"
+      @touchcancel="stopToolbarGroupLongPress"
+    >
+      <div v-if="!isToolbarGroupFirst('hand') && !isToolbarOverflowing" class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
+      <div
+        class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1"
+        :class="{ 'pointer-events-none select-none': isToolbarGroupReorderMode }"
+      >
+        <button
+          @click="toggleHandPanMode"
+          class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
             :class="{
               'bg-gray-300 dark:bg-gray-700 text-blue-700 dark:text-blue-400':
                 isHandPanActive,
@@ -2176,11 +2200,27 @@ onUnmounted(() => {
           >
             <PanTool class="w-4 h-4" />
           </button>
-        </div>
+      </div>
+    </div>
 
-        <div class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
-
-        <div class="relative" ref="panelTriggerRef">
+    <div
+      class="toolbar-reorder-group flex shrink-0 items-center gap-1"
+      :class="getToolbarGroupStateClass('panel')"
+      :style="getToolbarGroupStyle('panel')"
+      :draggable="isToolbarGroupReorderMode"
+      @dragstart="handleToolbarGroupDragStart($event, 'panel')"
+      @dragover="handleToolbarGroupDragOver($event, 'panel')"
+      @drop="handleToolbarGroupDrop($event, 'panel')"
+      @dragend="handleToolbarGroupDragEnd"
+      @mousedown.left="startToolbarGroupLongPress('panel')"
+      @mouseup="stopToolbarGroupLongPress"
+      @mouseleave="stopToolbarGroupLongPress"
+      @touchstart.passive="startToolbarGroupLongPress('panel')"
+      @touchend="stopToolbarGroupLongPress"
+      @touchcancel="stopToolbarGroupLongPress"
+    >
+      <div v-if="!isToolbarGroupFirst('panel') && !isToolbarOverflowing" class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
+      <div class="relative" ref="panelTriggerRef" :class="{ 'pointer-events-none select-none': isToolbarGroupReorderMode }">
           <div
             class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1"
           >
@@ -2200,15 +2240,32 @@ onUnmounted(() => {
             </button>
           </div>
         </div>
+    </div>
 
-        <div class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
-
-        <!-- Quick Access (Office-like) -->
-        <div
-          class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1"
-        >
-          <button
-            @click="handleExport"
+    <!-- Quick Access (Office-like) -->
+    <div
+      class="toolbar-reorder-group flex shrink-0 items-center gap-1"
+      :class="getToolbarGroupStateClass('quick')"
+      :style="getToolbarGroupStyle('quick')"
+      :draggable="isToolbarGroupReorderMode"
+      @dragstart="handleToolbarGroupDragStart($event, 'quick')"
+      @dragover="handleToolbarGroupDragOver($event, 'quick')"
+      @drop="handleToolbarGroupDrop($event, 'quick')"
+      @dragend="handleToolbarGroupDragEnd"
+      @mousedown.left="startToolbarGroupLongPress('quick')"
+      @mouseup="stopToolbarGroupLongPress"
+      @mouseleave="stopToolbarGroupLongPress"
+      @touchstart.passive="startToolbarGroupLongPress('quick')"
+      @touchend="stopToolbarGroupLongPress"
+      @touchcancel="stopToolbarGroupLongPress"
+    >
+      <div v-if="!isToolbarGroupFirst('quick') && !isToolbarOverflowing" class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
+      <div
+        class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1"
+        :class="{ 'pointer-events-none select-none': isToolbarGroupReorderMode }"
+      >
+        <button
+          @click="handleExport"
             :disabled="store.isGeneratingPdf"
             class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :title="t('editor.exportPdf')"
@@ -2261,13 +2318,31 @@ onUnmounted(() => {
             <Printer v-else class="w-4 h-4" />
           </button>
         </div>
+    </div>
 
-        <div class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
-
-        <div
-          class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1"
-        >
-          <div class="relative" ref="languageTriggerRef">
+    <!-- System Toggle -->
+    <div
+      class="toolbar-reorder-group flex shrink-0 items-center gap-1"
+      :class="getToolbarGroupStateClass('system')"
+      :style="getToolbarGroupStyle('system')"
+      :draggable="isToolbarGroupReorderMode"
+      @dragstart="handleToolbarGroupDragStart($event, 'system')"
+      @dragover="handleToolbarGroupDragOver($event, 'system')"
+      @drop="handleToolbarGroupDrop($event, 'system')"
+      @dragend="handleToolbarGroupDragEnd"
+      @mousedown.left="startToolbarGroupLongPress('system')"
+      @mouseup="stopToolbarGroupLongPress"
+      @mouseleave="stopToolbarGroupLongPress"
+      @touchstart.passive="startToolbarGroupLongPress('system')"
+      @touchend="stopToolbarGroupLongPress"
+      @touchcancel="stopToolbarGroupLongPress"
+    >
+      <div v-if="!isToolbarGroupFirst('system') && !isToolbarOverflowing" class="h-6 w-px bg-gray-300 dark:bg-gray-700"></div>
+      <div
+        class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1"
+        :class="{ 'pointer-events-none select-none': isToolbarGroupReorderMode }"
+      >
+        <div class="relative" ref="languageTriggerRef">
             <button
               @click="toggleLanguageMenu"
               class="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors"
@@ -2314,6 +2389,7 @@ onUnmounted(() => {
             <SettingsIcon class="w-4 h-4" />
           </button>
         </div>
+      </div>
 
         <Teleport :to="modalContainer || 'body'">
           <div
@@ -2484,7 +2560,6 @@ onUnmounted(() => {
         </Teleport>
 
         <!-- Help moved to dropdown -->
-    </div>
   </div>
 
   <PreviewModal
@@ -2512,3 +2587,31 @@ onUnmounted(() => {
     @save="handleSaveJson"
   />
 </template>
+
+<style scoped>
+@keyframes toolbar-tremble {
+  0% { transform: rotate(0) translate(0, 0); }
+  25% { transform: rotate(-0.5deg) translate(-1px, 0); }
+  50% { transform: rotate(0.5deg) translate(1px, 0); }
+  75% { transform: rotate(-0.5deg) translate(-1px, 0); }
+  100% { transform: rotate(0) translate(0, 0); }
+}
+
+.toolbar-reorder-group.toolbar-reorder-mode {
+  animation: toolbar-tremble 1.2s infinite ease-in-out;
+  cursor: grab;
+  border: 1px dashed var(--brand-500);
+  border-radius: 0;
+}
+
+.toolbar-reorder-group.toolbar-reorder-dragging {
+  opacity: 0.5;
+  animation: none;
+  cursor: grabbing;
+}
+
+.toolbar-reorder-group.toolbar-reorder-target {
+  box-shadow: 0 0 0 2px var(--brand-600) inset;
+  border-radius: 0;
+}
+</style>

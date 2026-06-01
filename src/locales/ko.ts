@@ -59,6 +59,7 @@ export default {
     },
   },
   editor: {
+    toolbarReorder: "툴바 정렬",
     preview: "인쇄 미리보기",
     exportPdf: "PDF 내보내기",
     exportHtml: "HTML 내보내기",

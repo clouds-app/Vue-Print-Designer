@@ -59,6 +59,7 @@ export default {
     },
   },
   editor: {
+    toolbarReorder: "Toolbar Reorder",
     preview: "Print Preview",
     exportPdf: "Export PDF",
     exportHtml: "Export HTML",

@@ -57,6 +57,7 @@ export default {
     },
   },
   editor: {
+    toolbarReorder: "操作栏排序",
     preview: "打印预览",
     exportPdf: "导出 PDF",
     exportHtml: "导出 HTML",

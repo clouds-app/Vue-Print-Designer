@@ -19,6 +19,7 @@ import FileOutput from "~icons/material-symbols/file-download";
 import DataObject from "~icons/material-symbols/data-object";
 import HelpCircleIcon from "~icons/material-symbols/help";
 import SettingsIcon from "~icons/material-symbols/settings";
+import ReorderIcon from "~icons/material-symbols/drag-indicator";
 
 const { t } = useI18n();
 const store = useDesignerStore();
@@ -133,6 +134,11 @@ const handleViewJson = () => {
 
 const handleOpenHelp = () => {
   store.setShowHelp(true);
+  closeExportMenu();
+};
+
+const handleToolbarReorder = () => {
+  dispatchDesignerEvent("designer:toolbar-reorder");
   closeExportMenu();
 };
 
@@ -260,6 +266,13 @@ const handleOpenSettings = () => {
             <span>{{ t("editor.viewPdfBlob") }}</span>
           </button>
           <div class="h-px bg-gray-200 dark:bg-gray-700 my-0.5"></div>
+          <button
+            @click="handleToolbarReorder"
+            class="w-full flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded text-sm text-left transition-colors whitespace-nowrap"
+          >
+            <ReorderIcon class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <span>{{ t("editor.toolbarReorder") }}</span>
+          </button>
           <button
             @click="handleOpenHelp"
             class="w-full flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded text-sm text-left transition-colors whitespace-nowrap"

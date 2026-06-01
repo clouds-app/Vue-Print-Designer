@@ -12,6 +12,7 @@ import {
 import type { PrintElement } from "@/types";
 import { useDesignerStore } from "@/stores/designer";
 import { normalizeVariableKey } from "@/utils/variables";
+import { createFontGroups } from "@/utils/fonts";
 import { useI18n } from "vue-i18n";
 import AlignLeft from "~icons/material-symbols/format-align-left";
 import AlignCenterHorizontal from "~icons/material-symbols/format-align-center";
@@ -165,33 +166,7 @@ const toolbarResetStyle = {
   fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
 } as const;
 
-const defaultFontOptions = computed(() => [
-  { label: t("editor.fonts.default"), value: "" },
-  { label: t("editor.fonts.arial"), value: "Arial, sans-serif" },
-  { label: t("editor.fonts.timesNewRoman"), value: '"Times New Roman", serif' },
-  { label: t("editor.fonts.courierNew"), value: '"Courier New", monospace' },
-  { label: t("editor.fonts.simSun"), value: "SimSun, serif" },
-  { label: t("editor.fonts.simHei"), value: "SimHei, sans-serif" },
-]);
-
-const fontOptions = computed(() => {
-  const customOptions = store.fontOptions || [];
-  if (!customOptions.length) {
-    return defaultFontOptions.value;
-  }
-
-  const normalizedCustom = customOptions.map((opt) => ({
-    label: (opt.label || opt.value || "").trim(),
-    value: opt.value,
-  }));
-  const hasDefaultOption = normalizedCustom.some((opt) => opt.value === "");
-
-  if (hasDefaultOption) {
-    return normalizedCustom;
-  }
-
-  return [{ label: t("editor.fonts.default"), value: "" }, ...normalizedCustom];
-});
+const fontGroups = computed(() => createFontGroups(t, store.fontOptions));
 
 const selectedFont = computed({
   get: () => props.element.style.fontFamily || "",
@@ -575,14 +550,21 @@ export const elementPropertiesSchema: ElementPropertiesSchema = {
             class="w-32 text-sm bg-transparent border-none outline-none focus:ring-0 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-200"
             :title="t('editor.fontFamily')"
           >
-            <option
-              v-for="opt in fontOptions"
-              :key="opt.value"
-              :value="opt.value"
+            <optgroup
+              v-for="group in fontGroups"
+              :key="group.label"
+              :label="group.label"
               class="dark:bg-gray-800 dark:text-gray-200"
             >
-              {{ opt.label }}
-            </option>
+              <option
+                v-for="opt in group.options"
+                :key="`${group.label}-${opt.value}`"
+                :value="opt.value"
+                class="dark:bg-gray-800 dark:text-gray-200"
+              >
+                {{ opt.label }}
+              </option>
+            </optgroup>
           </select>
 
           <div class="w-px h-4 bg-gray-300 dark:bg-gray-700"></div>
