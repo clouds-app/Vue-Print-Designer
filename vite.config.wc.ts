@@ -19,9 +19,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
-      "html2canvas": fileURLToPath(new URL("./src/mock/html2canvas.ts", import.meta.url)),
-      "canvg": fileURLToPath(new URL("./src/mock/canvg.ts", import.meta.url)),
-      "dompurify": fileURLToPath(new URL("./src/mock/dompurify.ts", import.meta.url)),
     },
   },
   build: {
