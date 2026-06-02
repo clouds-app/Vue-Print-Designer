@@ -10,6 +10,7 @@ import baseStyles from "@/style.css?inline";
 import { isShadowDomContent, lockViewportScroll } from "./dom";
 import { createPrintExecutor } from "./printChannel";
 import { createRenderEngine } from "./renderEngine";
+import { createZipBlob } from "./zipBuilder";
 
 export const usePrint = () => {
   const store = useDesignerStore();
@@ -409,18 +410,18 @@ export const usePrint = () => {
           link.click();
           document.body.removeChild(link);
         } else {
-          const jsZipModule = await import("jszip");
-          const JSZip = (jsZipModule as any)?.default || jsZipModule;
-          const zip = new JSZip();
-          await Promise.all(
+          const zipEntries = await Promise.all(
             pageImages.map(async (dataUrl: string, index: number) => {
               const response = await fetch(dataUrl);
               const blob = await response.blob();
-              zip.file(`${filenamePrefix}-${index + 1}.jpg`, blob);
+              return {
+                filename: `${filenamePrefix}-${index + 1}.jpg`,
+                data: blob,
+              };
             }),
           );
 
-          const zipBlob = await zip.generateAsync({ type: "blob" });
+          const zipBlob = await createZipBlob(zipEntries);
           const zipUrl = URL.createObjectURL(zipBlob);
           const link = document.createElement("a");
           link.href = zipUrl;

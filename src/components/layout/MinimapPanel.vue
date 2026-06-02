@@ -47,7 +47,7 @@ const PAGE_GAP = 20; // match Canvas.vue rowGap and PrintDesigner canvasStyle
 const MINIMAP_PAGE_NUMBER_Z_INDEX = 900;
 const MINIMAP_VIEWPORT_Z_INDEX = 1000;
 const MINIMAP_MAX_ELEMENT_Z_INDEX = MINIMAP_PAGE_NUMBER_Z_INDEX - 1;
-const VIEWPORT_STROKE_WIDTH = 2;
+const VIEWPORT_BORDER_PX = 2;
 
 const previewWidth = computed(() =>
   Math.ceil(Math.max(MIN_WIDTH, props.previewWidth ?? 180)),
@@ -68,9 +68,12 @@ const height = computed(() => {
 
 const previewScale = computed(() => props.zoom * ratio.value);
 
-const contentHeight = computed(() =>
-  Math.ceil(Math.max(height.value, previewMaxHeight.value)) + 2,
-);
+const contentHeight = computed(() => {
+  const h = Math.ceil(Math.max(height.value, previewMaxHeight.value));
+  // 当内容可滚动时（height > previewMaxHeight），多加 1px 缓冲，防止视口
+  // 指示器的底边与 content div 底边整数重合，被 overflow:hidden 裁掉最后 1px 边框
+  return height.value > previewMaxHeight.value ? h + 1 : h;
+});
 
 const viewportRect = computed(() => {
   const scaledWidth = props.scrollWidth * ratio.value;
@@ -80,19 +83,17 @@ const viewportRect = computed(() => {
   const exactRight = Math.min(scaledWidth, exactLeft + props.viewportWidth * ratio.value);
   const exactBottom = Math.min(scaledHeight, exactTop + props.viewportHeight * ratio.value);
 
-  const left = Math.round(exactLeft);
-  const top = Math.round(exactTop);
-  const right = Math.round(exactRight);
-  const bot = Math.round(exactBottom);
-
   return {
-    left,
-    top,
-    width: Math.max(0, right - left),
-    height: Math.max(0, bot - top)
+    left: Math.round(exactLeft),
+    top: Math.round(exactTop),
+    width: Math.max(0, Math.round(exactRight) - Math.round(exactLeft)),
+    height: Math.max(0, Math.round(exactBottom) - Math.round(exactTop)),
   };
 });
 
+// 使用单个元素 + inset box-shadow 绘制视口边框。
+// inset 阴影完全绘制在元素内部，不会被父容器 overflow:hidden 裁切，
+// 从根本上消除多 div 方案在底部/右侧少一个像素边框的问题。
 const viewportStyle = computed(() => {
   const rect = viewportRect.value;
   return {
@@ -101,53 +102,7 @@ const viewportStyle = computed(() => {
     width: `${rect.width}px`,
     height: `${rect.height}px`,
     zIndex: MINIMAP_VIEWPORT_Z_INDEX,
-  };
-});
-
-const viewportFrameStyles = computed(() => {
-  const rect = viewportRect.value;
-  const stroke = VIEWPORT_STROKE_WIDTH;
-  const right = Math.min(
-    Math.max(rect.left, rect.left + rect.width - stroke),
-    Math.max(0, previewWidth.value - stroke),
-  );
-  const bottom = Math.min(
-    Math.max(rect.top, rect.top + rect.height - stroke),
-    Math.max(0, contentHeight.value - stroke),
-  );
-  const frameWidth = Math.max(stroke, right - rect.left + stroke);
-  const frameHeight = Math.max(stroke, bottom - rect.top + stroke);
-  const zIndex = MINIMAP_VIEWPORT_Z_INDEX + 1;
-
-  return {
-    top: {
-      left: `${rect.left}px`,
-      top: `${rect.top}px`,
-      width: `${frameWidth}px`,
-      height: `${stroke}px`,
-      zIndex,
-    },
-    right: {
-      left: `${right}px`,
-      top: `${rect.top}px`,
-      width: `${stroke}px`,
-      height: `${frameHeight}px`,
-      zIndex,
-    },
-    bottom: {
-      left: `${rect.left}px`,
-      top: `${bottom}px`,
-      width: `${frameWidth}px`,
-      height: `${stroke}px`,
-      zIndex,
-    },
-    left: {
-      left: `${rect.left}px`,
-      top: `${rect.top}px`,
-      width: `${stroke}px`,
-      height: `${frameHeight}px`,
-      zIndex,
-    },
+    boxShadow: `inset 0 0 0 ${VIEWPORT_BORDER_PX}px #3b82f6`,
   };
 });
 
@@ -641,7 +596,7 @@ const handleMouseDown = (e: MouseEvent) => {
       class="relative select-none box-content overflow-hidden"
       :style="{
         width: `${previewWidth}px`,
-        height: `${Math.max(height, previewMaxHeight)}px`,
+        height: `${contentHeight}px`,
       }"
       @mousedown="handleMouseDown"
     >
@@ -841,26 +796,10 @@ const handleMouseDown = (e: MouseEvent) => {
         </template>
       </div>
 
-      <!-- Viewport -->
+      <!-- Viewport: inset box-shadow 边框完全在元素内部绘制，不会被 overflow:hidden 裁切 -->
       <div
         class="absolute bg-blue-500/10 cursor-move"
         :style="viewportStyle"
-      ></div>
-      <div
-        class="absolute pointer-events-none bg-blue-500"
-        :style="viewportFrameStyles.top"
-      ></div>
-      <div
-        class="absolute pointer-events-none bg-blue-500"
-        :style="viewportFrameStyles.right"
-      ></div>
-      <div
-        class="absolute pointer-events-none bg-blue-500"
-        :style="viewportFrameStyles.bottom"
-      ></div>
-      <div
-        class="absolute pointer-events-none bg-blue-500"
-        :style="viewportFrameStyles.left"
       ></div>
     </div>
   </div>
