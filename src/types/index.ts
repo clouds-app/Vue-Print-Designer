@@ -330,6 +330,8 @@ export interface DesignerState {
   watermark?: WatermarkSettings;
   zoom: number;
   isDragging: boolean;
+  isResizing: boolean;
+  isRotating: boolean;
   showGrid: boolean;
   showMarginLines: boolean;
   allowDragOutsideCanvas: boolean;
@@ -351,6 +353,7 @@ export interface DesignerState {
   footerLineSpan: number;
   showMinimap: boolean;
   showHistoryPanel: boolean;
+  showStatusBar: boolean;
   showTextQuickToolbar: boolean;
   showDeveloperMode: boolean;
   showPaginationDebugLogs: boolean;
@@ -388,6 +391,7 @@ export interface DesignerState {
     }[];
   } | null;
   availableVariables?: VariableTreeItem[];
+  printProgress?: { phase: string; current: number; total: number; message: string } | null;
 }
 
 export interface Guide {

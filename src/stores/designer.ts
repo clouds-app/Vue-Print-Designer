@@ -152,6 +152,12 @@ const loadTextQuickToolbarEnabled = () => {
   return stored !== "false";
 };
 
+const loadStatusBarVisible = () => {
+  const stored = localStorage.getItem("print-designer-show-status-bar");
+  if (stored === null) return true;
+  return stored !== "false";
+};
+
 type LayerMoveMode = "front" | "back" | "forward" | "backward";
 
 const getElementZIndex = (element: PrintElement) => element.style?.zIndex || 1;
@@ -587,6 +593,8 @@ export const useDesignerStore = defineStore("designer", {
     canvasSize: { width: 794, height: 1123 }, // A4 at 96 DPI (approx)
     zoom: 1,
     isDragging: false,
+    isResizing: false,
+    isRotating: false,
     showGrid: true,
     showMarginLines: true,
     allowDragOutsideCanvas: false,
@@ -608,6 +616,7 @@ export const useDesignerStore = defineStore("designer", {
     footerLineSpan: 100,
     showMinimap: false,
     showHistoryPanel: false,
+    showStatusBar: loadStatusBarVisible(),
     showTextQuickToolbar: loadTextQuickToolbarEnabled(),
     showDeveloperMode: loadDeveloperMode(),
     showPaginationDebugLogs: loadDeveloperMode() && loadPaginationDebugLogs(),
@@ -630,6 +639,7 @@ export const useDesignerStore = defineStore("designer", {
     isGeneratingPdf: false,
     isGeneratingHtml: false,
     isGeneratingImages: false,
+    printProgress: null as { phase: string; current: number; total: number; message: string } | null,
     disableGlobalShortcuts: false,
     disableShortcutsCount: 0,
     tableSelection: null,
@@ -711,6 +721,12 @@ export const useDesignerStore = defineStore("designer", {
     setDragging(isDragging: boolean) {
       this.isDragging = isDragging;
     },
+    setResizing(isResizing: boolean) {
+      this.isResizing = isResizing;
+    },
+    setRotating(isRotating: boolean) {
+      this.isRotating = isRotating;
+    },
     setDisableGlobalShortcuts(val: boolean) {
       const current = this.disableShortcutsCount || 0;
       if (val) {
@@ -722,6 +738,9 @@ export const useDesignerStore = defineStore("designer", {
     },
     setIsExporting(isExporting: boolean) {
       this.isExporting = isExporting;
+    },
+    setPrintProgress(progress: { phase: string; current: number; total: number; message: string } | null) {
+      this.printProgress = progress;
     },
     setPageSpacingX(value: number) {
       this.pageSpacingX = Math.max(0, Math.round(value));
@@ -770,6 +789,9 @@ export const useDesignerStore = defineStore("designer", {
       this.pageSpacingY = 0;
       this.canvasSize = { width: 794, height: 1123 };
       this.zoom = 1;
+      this.isDragging = false;
+      this.isResizing = false;
+      this.isRotating = false;
       this.showGrid = true;
       this.allowDragOutsideCanvas = false;
       this.showCornerMarkers = true;
@@ -1682,6 +1704,13 @@ export const useDesignerStore = defineStore("designer", {
     },
     setShowHistoryPanel(show: boolean) {
       this.showHistoryPanel = show;
+    },
+    setShowStatusBar(show: boolean) {
+      this.showStatusBar = show;
+      localStorage.setItem(
+        "print-designer-show-status-bar",
+        show ? "true" : "false",
+      );
     },
     setShowTextQuickToolbar(show: boolean) {
       this.showTextQuickToolbar = show;

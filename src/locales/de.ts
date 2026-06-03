@@ -39,6 +39,7 @@ export default {
       "Schlüssel der Testdaten können nicht geändert werden. Bitte bearbeiten Sie nur die Werte.",
     variables: "Verfügbare Variablen",
     noData: "Keine Daten",
+    resizePanel: "Panelgröße ändern",
   },
   template: {
     select: "Vorlage auswählen",
@@ -664,6 +665,8 @@ export default {
     themeColor: "Designfarbe",
     themeColorDesc:
       "Wählen Sie eine vordefinierte Designfarbe und übernehmen Sie sie sofort.",
+    showStatusBar: "Statusleiste",
+    showStatusBarDesc: "Statusleiste am unteren Rand des Editors anzeigen.",
     themePresetDefault: "Blau",
     themePresetEmerald: "Smaragd",
     themePresetAmber: "Bernstein",
@@ -858,5 +861,36 @@ export default {
     printFailed: "Drucken fehlgeschlagen",
     exportPdfFailed: "PDF-Export fehlgeschlagen",
     exportImageFailed: "Bildexport fehlgeschlagen",
+  },
+  statusBar: {
+    ready: "Bereit",
+    dragging: "Bewegen",
+    draggingElement: "{element} wird bewegt",
+    draggingMultiple: "{n} Elemente werden bewegt",
+    resizing: "Skalieren",
+    resizingElement: "{element} wird skaliert",
+    resizingMultiple: "{n} Elemente werden skaliert",
+    rotating: "Drehen",
+    rotatingElement: "{element} wird gedreht",
+    rotatingMultiple: "{n} Elemente werden gedreht",
+    zoom: "Zoom",
+    template: {
+      saving: "Vorlage wird gespeichert",
+      saved: "Vorlage gespeichert",
+      unsaved: "Vorlage nicht gespeichert",
+    },
+    connection: {
+      cloudConnected: "Cloud-Druck verbunden",
+      cloudDisconnected: "Cloud-Druck getrennt",
+      clientConnected: "Client verbunden",
+      clientDisconnected: "Client getrennt",
+    },
+    progress: {
+      preparing: "Vorbereiten",
+      rendering: "Rendern",
+      renderingPage: "Rendern {current}/{total}",
+      saving: "Speichern",
+      printing: "Drucken",
+    },
   },
 };

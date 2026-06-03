@@ -7,6 +7,7 @@ import { formatShortcut } from "@/utils/os";
 import X from "~icons/material-symbols/close";
 import KeyboardIcon from "~icons/material-symbols/keyboard";
 import InfoIcon from "~icons/material-symbols/info";
+import GithubIcon from "@/svg/components/GithubIcon.vue";
 import pkg from "../../../../package.json";
 
 const props = defineProps<{
@@ -448,16 +449,7 @@ const projectName = startCase(pkg.name);
                       <span
                         class="inline-flex items-center gap-1.5 text-gray-500"
                       >
-                        <svg
-                          viewBox="0 0 16 16"
-                          aria-hidden="true"
-                          class="w-3.5 h-3.5"
-                        >
-                          <path
-                            fill="currentColor"
-                            d="M8 0C3.58 0 0 3.73 0 8.35c0 3.7 2.29 6.83 5.47 7.94.4.08.55-.18.55-.4 0-.2-.01-.86-.01-1.56-2.01.38-2.53-.5-2.69-.96-.09-.24-.48-.96-.82-1.16-.28-.16-.68-.56-.01-.57.63-.01 1.08.6 1.23.85.72 1.25 1.87.9 2.33.69.07-.54.28-.9.51-1.11-1.78-.21-3.64-.92-3.64-4.08 0-.9.31-1.64.82-2.22-.08-.21-.36-1.06.08-2.2 0 0 .67-.22 2.2.85.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.07 2.2-.85 2.2-.85.44 1.14.16 1.99.08 2.2.51.58.82 1.32.82 2.22 0 3.17-1.87 3.87-3.65 4.08.29.26.54.77.54 1.56 0 1.12-.01 2.03-.01 2.32 0 .22.15.48.55.4C13.71 15.18 16 12.04 16 8.35 16 3.73 12.42 0 8 0z"
-                          />
-                        </svg>
+                        <GithubIcon class="w-3.5 h-3.5" />
                         {{ t("help.github") }}
                       </span>
                       <a

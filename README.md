@@ -4,7 +4,7 @@
 
 <h1 align="center">Vue Print Designer</h1>
 
-<p align="center"><b>最新优化</b>&emsp;移除 6 个第三方大包，首次加载体积减少约 <b>65%</b>；渲染引擎全链路自研，单页渲染耗时由约 <b>300 ms 降至 80 ms</b>（约 −73%）；多语言 2 → <b>6 种</b>，浏览器自动适配。</p>
+<table width="100%"><tr><td align="center" bgcolor="#e8f4fd"><b>最新优化：</b>&emsp;移除 6 个第三方大包，首次加载体积减少约 <b>65%</b>；渲染引擎全链路自研，单页渲染耗时由约 <b>300 ms 降至 80 ms</b>（约 −73%）；多语言 2 → <b>6 种</b>，浏览器自动适配。</td></tr></table>
 
 <p align="center">
   <a href="https://gitee.com/theGreatOldFive/vue-print-designer/stargazers"><img src="https://gitee.com/theGreatOldFive/vue-print-designer/badge/star.svg?theme=flat" alt="Gitee stars"></a>

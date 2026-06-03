@@ -2,6 +2,7 @@
 import { computed, ref, watch, onMounted, nextTick } from "vue";
 import { ElementType, type PrintElement } from "@/types";
 import TableElement from "@/components/elements/TableElement.vue";
+import { buildWatermarkPatternSvg } from "@/svg/templates";
 
 // 定义水印设置接口
 interface WatermarkSettings {
@@ -106,32 +107,26 @@ const viewportStyle = computed(() => {
   };
 });
 
-const escapeXml = (value: string) =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-
 const watermarkStyle = computed(() => {
   const watermark = props.watermark;
   if (!watermark || !watermark.enabled || !watermark.text) return null;
 
-  const text = escapeXml(watermark.text);
-  const angle = Number.isFinite(watermark.angle) ? watermark.angle : -30;
+  const angle = Number.isFinite(watermark.angle)
+    ? Number(watermark.angle)
+    : -30;
   const size = Math.max(6, watermark.size || 24);
   const density = Math.max(40, watermark.density || 160);
   const color = watermark.color || "#000000";
   const opacity = Math.min(1, Math.max(0, watermark.opacity ?? 0.1));
 
-  const svg =
-    `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${density}" height="${density}">` +
-    `<text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"` +
-    ` fill="${color}" fill-opacity="${opacity}" font-size="${size}"` +
-    ` transform="rotate(${angle} ${density / 2} ${density / 2})">${text}</text>` +
-    `</svg>`;
+  const svg = buildWatermarkPatternSvg({
+    text: watermark.text,
+    angle,
+    size,
+    density,
+    color,
+    opacity,
+  });
 
   const encoded = encodeURIComponent(svg);
   return {

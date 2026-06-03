@@ -1,11 +1,14 @@
 import { usePrintSettings } from "@/composables/usePrintSettings";
 import { deduplicateInlineStyles } from "../dom";
+import { buildForeignObjectSvg } from "@/svg/templates";
 
 export interface DomToImageOptions {
   /** 画布背景色，用于 Canvas fillStyle 兜底 */
   canvasBackground: string;
   /** 是否输出渲染调试日志 */
   showRenderDebugLogs?: boolean;
+  /** 每页渲染完成回调，用于上报进度 */
+  onPageRendered?: (current: number, total: number) => void;
 }
 
 /**
@@ -22,7 +25,7 @@ export const generatePageImages = async (
   height: number,
   options: DomToImageOptions,
 ): Promise<string[]> => {
-  const { canvasBackground, showRenderDebugLogs = false } = options;
+  const { canvasBackground, showRenderDebugLogs = false, onPageRendered } = options;
 
   const startTime = performance.now();
   if (showRenderDebugLogs) {
@@ -155,14 +158,13 @@ export const generatePageImages = async (
         htmlStr = htmlStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
       }
 
-      const svgString =
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${width * scale}" height="${height * scale}">` +
-        `<foreignObject x="0" y="0" width="100%" height="100%">` +
-        `<div xmlns="http://www.w3.org/1999/xhtml" style="width: ${width}px; height: ${height}px; transform: scale(${scale}); transform-origin: top left; background-color: ${canvasBackground}; margin: 0; padding: 0;">` +
-        htmlStr +
-        `</div>` +
-        `</foreignObject>` +
-        `</svg>`;
+      const svgString = buildForeignObjectSvg({
+        width,
+        height,
+        scale,
+        html: htmlStr,
+        backgroundColor: canvasBackground,
+      });
 
       // Chrome 对 Blob URL 中含 <foreignObject> 的 SVG 加载到 Canvas 后强制标记 Tainted，
       // 必须使用 data URI。encodeURIComponent 对 SVG 内容（主要是 ASCII：CSS 属性名、数值、
@@ -217,6 +219,9 @@ export const generatePageImages = async (
       const batch = pages.slice(i, i + batchSize);
       const results = await Promise.all(batch.map(generatePageImage));
       pageImages.push(...results);
+      if (onPageRendered) {
+        onPageRendered(Math.min(i + batchSize, pages.length), pages.length);
+      }
       if (showRenderDebugLogs) {
         console.log(
           `[Render Debug] generatePageImages batch ${Math.floor(i / batchSize) + 1} took ${(performance.now() - batchStart).toFixed(2)}ms`,

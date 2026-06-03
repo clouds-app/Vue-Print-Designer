@@ -580,6 +580,8 @@ const handleKeyup = (e: KeyboardEvent) => {
 
 const handleWindowBlur = () => {
   store.setDragging(false);
+  store.setResizing(false);
+  store.setRotating(false);
   store.setHighlightedGuide(null);
   store.setHighlightedEdge(null);
   store.setHighlightedAlignedElements([]);

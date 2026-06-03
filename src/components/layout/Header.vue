@@ -10,7 +10,7 @@ import HelpModal from "./help/HelpModal.vue";
 import SettingsModal from "./settings/SettingsModal.vue";
 import defaultLogo from "@/assets/logo.png";
 import Save from "~icons/material-symbols/save";
-import Loading from "@/components/common/LoadingIcon.vue";
+import Loading from "@/svg/components/LoadingIcon.vue";
 import ChevronDown from "~icons/material-symbols/expand-more";
 import SaveAs from "~icons/material-symbols/save-as";
 import PreviewIcon from "~icons/material-symbols/preview";

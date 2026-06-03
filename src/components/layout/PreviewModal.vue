@@ -6,7 +6,7 @@ import { useJsonBlobModal } from "@/composables/useJsonBlobModal";
 import { useTemplateStore } from "@/stores/templates";
 import { useDesignerStore } from "@/stores/designer";
 import Printer from "~icons/material-symbols/print";
-import Loading from "@/components/common/LoadingIcon.vue";
+import Loading from "@/svg/components/LoadingIcon.vue";
 import FilePdf from "~icons/material-symbols/picture-as-pdf";
 import FileOutput from "~icons/material-symbols/file-download";
 import Image from "~icons/material-symbols/image";
@@ -281,7 +281,7 @@ onUnmounted(() => {
 
         <!-- Footer -->
         <div
-          class="px-4 py-3 border-t border-gray-200 bg-gray-50 flex justify-end gap-2.5 shrink-0 rounded-b-lg"
+          class="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex justify-end gap-2.5 shrink-0 rounded-b-lg"
         >
           <button
             @click="handlePrint"
@@ -345,7 +345,7 @@ onUnmounted(() => {
           </button>
           <button
             @click="handleClose"
-            class="whitespace-nowrap px-3 py-1.5 border border-red-200 bg-red-50 text-red-600 rounded hover:bg-red-100 flex items-center gap-1.5 text-xs transition-colors"
+            class="whitespace-nowrap px-3 py-1.5 border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-1.5 text-xs transition-colors"
           >
             <Close class="w-4 h-4 shrink-0" />
             {{ t("common.close") }}

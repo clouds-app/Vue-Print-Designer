@@ -15,7 +15,7 @@ import Preview from "~icons/material-symbols/preview";
 import HtmlIcon from "~icons/material-symbols/html";
 import FilePdf from "~icons/material-symbols/picture-as-pdf";
 import Image from "~icons/material-symbols/image";
-import Loading from "@/components/common/LoadingIcon.vue";
+import Loading from "@/svg/components/LoadingIcon.vue";
 import ZoomIn from "~icons/material-symbols/zoom-in";
 import ZoomOut from "~icons/material-symbols/zoom-out";
 import PanTool from "~icons/material-symbols/pan-tool";
@@ -1247,15 +1247,28 @@ const handlePreview = async () => {
     if (store.isGeneratingPreview) return;
     store.isGeneratingPreview = true;
     try {
+      store.setPrintProgress({
+        phase: "preview",
+        current: 0,
+        total: 1,
+        message: t("statusBar.progress.preparing"),
+      });
       const pages = Array.from(
         getQueryRoot().querySelectorAll(".print-page"),
       ) as HTMLElement[];
+      store.setPrintProgress({
+        phase: "preview",
+        current: 1,
+        total: 1,
+        message: t("statusBar.progress.rendering"),
+      });
       previewContent.value = await getPrintHtml(pages);
       showPreview.value = true;
     } catch (e) {
       console.error(e);
       toast.error("Preview generation failed");
     } finally {
+      store.setPrintProgress(null);
       store.isGeneratingPreview = false;
     }
   };

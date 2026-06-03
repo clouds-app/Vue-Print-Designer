@@ -1,4 +1,4 @@
-import { createApp, nextTick, ref, h } from "vue";
+import { createApp, nextTick, ref, h, watch } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import i18n, { createI18nInstance, type SupportedLanguage } from "./locales";
 import baseStyles from "./style.css?inline";
@@ -59,11 +59,32 @@ export type DesignerExportRequest = {
   filename?: string;
   filenamePrefix?: string;
   merged?: boolean;
+  onProgress?: DesignerProgressCallback;
 };
 
 export type DesignerPrintRequest = {
   mode?: PrintMode;
   options?: PrintOptions;
+  onProgress?: DesignerProgressCallback;
+};
+
+export type DesignerProgressScope = "print" | "export" | "preview";
+
+export type DesignerProgressPayload = {
+  scope: DesignerProgressScope;
+  phase: string;
+  current: number;
+  total: number;
+  percent: number;
+  message: string;
+};
+
+export type DesignerProgressCallback = (
+  payload: DesignerProgressPayload,
+) => void;
+
+export type DesignerPreviewRequest = {
+  onProgress?: DesignerProgressCallback;
 };
 
 export type DesignerPrintDefaults = {
@@ -418,10 +439,77 @@ class PrintDesignerElement extends HTMLElement {
     return Array.from(root.querySelectorAll(".print-page")) as HTMLElement[];
   }
 
+  private createProgressPayload(
+    scope: DesignerProgressScope,
+    progress: {
+      phase: string;
+      current: number;
+      total: number;
+      message: string;
+    },
+  ): DesignerProgressPayload {
+    const current = Number(progress.current);
+    const total = Number(progress.total);
+    const safeCurrent = Number.isFinite(current) ? Math.max(0, current) : 0;
+    const safeTotal = Number.isFinite(total) && total > 0 ? total : 1;
+    const percent = Math.round((safeCurrent / safeTotal) * 100);
+
+    return {
+      scope,
+      phase: String(progress.phase || ""),
+      current: safeCurrent,
+      total: safeTotal,
+      percent: Math.max(0, Math.min(100, percent)),
+      message: String(progress.message || ""),
+    };
+  }
+
+  private emitProgress(
+    scope: DesignerProgressScope,
+    progress: {
+      phase: string;
+      current: number;
+      total: number;
+      message: string;
+    },
+    callback?: DesignerProgressCallback,
+  ) {
+    const payload = this.createProgressPayload(scope, progress);
+    callback?.(payload);
+    this.dispatchEvent(new CustomEvent("progress", { detail: payload }));
+  }
+
+  private bindProgressReporter(
+    scope: DesignerProgressScope,
+    callback?: DesignerProgressCallback,
+  ) {
+    if (!this.designerStore) {
+      return () => {};
+    }
+
+    let lastKey = "";
+    const stop = watch(
+      () => this.designerStore?.printProgress,
+      (progress) => {
+        if (!progress) return;
+        const nextKey = `${progress.phase}|${progress.current}|${progress.total}|${progress.message}`;
+        if (nextKey === lastKey) return;
+        lastKey = nextKey;
+        this.emitProgress(scope, progress, callback);
+      },
+      { deep: false },
+    );
+
+    return () => {
+      stop();
+    };
+  }
+
   async print(request: DesignerPrintRequest = {}) {
     if (!this.printApi) return;
     const pages = this.getPrintPages();
     this.dispatchEvent(new CustomEvent("print", { detail: { request } }));
+    const stopProgress = this.bindProgressReporter("print", request.onProgress);
     try {
       const result = await this.printApi.print(pages, {
         mode: request.mode,
@@ -436,13 +524,47 @@ class PrintDesignerElement extends HTMLElement {
         new CustomEvent("error", { detail: { scope: "print", error } }),
       );
       throw error;
+    } finally {
+      stopProgress();
     }
   }
 
-  async getPreviewHtml() {
+  async getPreviewHtml(request: DesignerPreviewRequest = {}) {
     if (!this.printApi) return "";
+    const stopProgress = this.bindProgressReporter("preview", request.onProgress);
     try {
-      return await this.printApi.getPrintHtml(this.getPrintPages());
+      this.emitProgress(
+        "preview",
+        {
+          phase: "preview",
+          current: 0,
+          total: 100,
+          message: this.i18n?.global.t("statusBar.progress.preparing") || "Preparing",
+        },
+        request.onProgress,
+      );
+      this.emitProgress(
+        "preview",
+        {
+          phase: "preview",
+          current: 35,
+          total: 100,
+          message: this.i18n?.global.t("statusBar.progress.rendering") || "Rendering",
+        },
+        request.onProgress,
+      );
+      const html = await this.printApi.getPrintHtml(this.getPrintPages());
+      this.emitProgress(
+        "preview",
+        {
+          phase: "preview",
+          current: 100,
+          total: 100,
+          message: this.i18n?.global.t("statusBar.progress.rendering") || "Rendering",
+        },
+        request.onProgress,
+      );
+      return html;
     } catch (error) {
       this.dispatchEvent(
         new CustomEvent("error", {
@@ -450,6 +572,8 @@ class PrintDesignerElement extends HTMLElement {
         }),
       );
       throw error;
+    } finally {
+      stopProgress();
     }
   }
 
@@ -460,6 +584,8 @@ class PrintDesignerElement extends HTMLElement {
     if (request?.merged !== undefined) {
       this.printSettings.exportImageMerged.value = Boolean(request.merged);
     }
+
+    const stopProgress = this.bindProgressReporter("export", request.onProgress);
 
     try {
       this.dispatchEvent(new CustomEvent("export", { detail: { request } }));
@@ -494,7 +620,10 @@ class PrintDesignerElement extends HTMLElement {
         return;
       }
       if (type === "pdfBlob") {
-        const blob = await this.printApi.getPdfBlob(this.getPrintPages());
+        const blob = await this.printApi.getPdfBlob(this.getPrintPages(), {
+          phase: "pdf",
+          showProgress: true,
+        });
         this.dispatchEvent(
           new CustomEvent("exported", { detail: { request, blob } }),
         );
@@ -514,6 +643,7 @@ class PrintDesignerElement extends HTMLElement {
       );
       throw error;
     } finally {
+      stopProgress();
       this.printSettings.exportImageMerged.value = previousMerged;
     }
   }

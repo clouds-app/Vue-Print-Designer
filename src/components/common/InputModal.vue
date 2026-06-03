@@ -334,10 +334,10 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50 flex justify-end gap-2.5 shrink-0 rounded-b-lg">
+        <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex justify-end gap-2.5 shrink-0 rounded-b-lg">
           <button
             @click="emit('close')"
-            class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 border border-red-200 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs transition-colors"
+            class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-xs transition-colors"
           >
             <Close class="w-4 h-4 shrink-0" />
             {{ t("common.cancel") }}

@@ -569,6 +569,8 @@ const handleMouseDown = (e: MouseEvent) => {
 
   isDragging = true;
   store.setDragging(true);
+  store.setResizing(false);
+  store.setRotating(false);
   hasSnapshot = false;
   startX = e.clientX;
   startY = e.clientY;
@@ -698,6 +700,8 @@ const handleMouseUp = (e: MouseEvent) => {
 
   isDragging = false;
   store.setDragging(false);
+  store.setResizing(false);
+  store.setRotating(false);
   window.removeEventListener("mousemove", handleMouseMove);
   window.removeEventListener("mouseup", handleMouseUp);
   store.setHighlightedGuide(null);
@@ -718,6 +722,9 @@ const handleRotateStart = (e: MouseEvent) => {
   if (!elementRef.value) return;
 
   isRotating.value = true;
+  store.setDragging(false);
+  store.setResizing(false);
+  store.setRotating(true);
   isSnapped.value = false;
   hasSnapshot = false;
   currentRotationDisplay.value = props.element.style.rotate || 0;
@@ -787,6 +794,7 @@ const handleRotateStart = (e: MouseEvent) => {
 
   const handleRotateUp = () => {
     isRotating.value = false;
+    store.setRotating(false);
     window.removeEventListener("mousemove", handleRotateMove);
     window.removeEventListener("mouseup", handleRotateUp);
   };
@@ -1375,6 +1383,8 @@ const handleResizeStart = (e: MouseEvent, direction: ResizeHandleDirection) => {
   };
   hasSnapshot = false;
   store.setDragging(true);
+  store.setResizing(true);
+  store.setRotating(false);
   store.setHighlightedGuide(null);
   store.setHighlightedEdge(null);
   store.setHighlightedAlignedElements([]);
@@ -1498,6 +1508,7 @@ const handleResizeStart = (e: MouseEvent, direction: ResizeHandleDirection) => {
 
   const handleResizeUp = () => {
     store.setDragging(false);
+    store.setResizing(false);
     store.setHighlightedGuide(null);
     store.setHighlightedEdge(null);
     store.setHighlightedAlignedElements([]);

@@ -13,6 +13,13 @@ type PrintRequest = {
   options?: PrintOptions;
 };
 
+type PrintProgress = {
+  phase: string;
+  current: number;
+  total: number;
+  message: string;
+};
+
 type PrintExecutorDeps = {
   printMode: RefLike<PrintMode | undefined>;
   silentPrint: RefLike<boolean | undefined>;
@@ -33,6 +40,7 @@ type PrintExecutorDeps = {
   ) => Promise<any>;
   getPdfBlob: (content: HTMLElement | string | HTMLElement[]) => Promise<Blob>;
   browserPrint: (content: HTMLElement | string | HTMLElement[]) => Promise<any>;
+  reportProgress?: (progress: PrintProgress | null) => void;
 };
 
 const blobToDataUrl = (blob: Blob) =>
@@ -93,6 +101,10 @@ export const createPrintExecutor = (deps: PrintExecutorDeps) => {
   let localSocketUrl = "";
   let localSocketPromise: Promise<WebSocket> | null = null;
   let localQueue: Promise<any> = Promise.resolve();
+
+  const reportProgress = (progress: PrintProgress | null) => {
+    deps.reportProgress?.(progress);
+  };
 
   const resetLocalSocket = () => {
     if (localSocket && localSocket.readyState === WebSocket.OPEN) {
@@ -300,9 +312,58 @@ export const createPrintExecutor = (deps: PrintExecutorDeps) => {
       throw new Error("Printer is required");
     }
 
+    let renderTicker: number | null = null;
+    let reachedComplete = false;
+
     try {
+      let renderProgress = 8;
+      reportProgress({
+        phase: "print",
+        current: 0,
+        total: 100,
+        message: i18n.global.t("statusBar.progress.preparing"),
+      });
+      reportProgress({
+        phase: "print",
+        current: renderProgress,
+        total: 100,
+        message: i18n.global.t("statusBar.progress.rendering"),
+      });
+
+      renderTicker = window.setInterval(() => {
+        renderProgress = Math.min(62, renderProgress + 3);
+        reportProgress({
+          phase: "print",
+          current: renderProgress,
+          total: 100,
+          message: i18n.global.t("statusBar.progress.rendering"),
+        });
+        if (renderProgress >= 62 && renderTicker !== null) {
+          window.clearInterval(renderTicker);
+          renderTicker = null;
+        }
+      }, 120);
+
       const pdfBlob = await deps.getPdfBlob(content);
+      if (renderTicker !== null) {
+        window.clearInterval(renderTicker);
+        renderTicker = null;
+      }
+
+      reportProgress({
+        phase: "print",
+        current: 72,
+        total: 100,
+        message: i18n.global.t("statusBar.progress.preparing"),
+      });
       const dataUrl = await blobToDataUrl(pdfBlob);
+
+      reportProgress({
+        phase: "print",
+        current: 88,
+        total: 100,
+        message: i18n.global.t("statusBar.progress.printing"),
+      });
 
       if (mode === "local") {
         const payload = buildPrintPayload(
@@ -310,12 +371,20 @@ export const createPrintExecutor = (deps: PrintExecutorDeps) => {
           dataUrl,
           deps.localSettings.secretKey.trim(),
         );
-        return await sendLocalWsPrint(
+        const result = await sendLocalWsPrint(
           deps.localWsUrl.value as string,
           payload,
           "status",
           currentOptions.timeout || 30000,
         );
+        reachedComplete = true;
+        reportProgress({
+          phase: "print",
+          current: 100,
+          total: 100,
+          message: i18n.global.t("statusBar.progress.printing"),
+        });
+        return result;
       }
 
       if (!deps.remoteSelectedClientId.value) {
@@ -326,14 +395,30 @@ export const createPrintExecutor = (deps: PrintExecutorDeps) => {
       const payload = buildPrintPayload(currentOptions, dataUrl);
       payload.cmd = "submit_task";
       payload.client_id = deps.remoteSelectedClientId.value;
-      return await deps.submitRemoteTask(
+      const result = await deps.submitRemoteTask(
         payload,
         currentOptions.timeout || 30000,
       );
+      reachedComplete = true;
+      reportProgress({
+        phase: "print",
+        current: 100,
+        total: 100,
+        message: i18n.global.t("statusBar.progress.printing"),
+      });
+      return result;
     } catch (error) {
       console.error("Print failed", error);
       toast.error(i18n.global.t("toast.printFailed"));
       throw error;
+    } finally {
+      if (renderTicker !== null) {
+        window.clearInterval(renderTicker);
+      }
+      if (reachedComplete) {
+        await new Promise((resolve) => setTimeout(resolve, 180));
+      }
+      reportProgress(null);
     }
   };
 

@@ -190,19 +190,90 @@ export const usePrint = () => {
     prepareEnvironment,
   });
 
+  const createProgressTicker = (params: {
+    phase: string;
+    message: string;
+    start?: number;
+    max?: number;
+    step?: number;
+    interval?: number;
+  }) => {
+    const {
+      phase,
+      message,
+      start = 0,
+      max = 90,
+      step = 3,
+      interval = 120,
+    } = params;
+
+    let value = Math.max(0, Math.min(start, max));
+    store.setPrintProgress({ phase, current: value, total: 100, message });
+
+    const timer = window.setInterval(() => {
+      value = Math.min(max, value + step);
+      store.setPrintProgress({ phase, current: value, total: 100, message });
+      if (value >= max) {
+        window.clearInterval(timer);
+      }
+    }, interval);
+
+    return {
+      stop: (next?: { current: number; total?: number; message?: string }) => {
+        window.clearInterval(timer);
+        if (next) {
+          store.setPrintProgress({
+            phase,
+            current: next.current,
+            total: next.total ?? 100,
+            message: next.message ?? message,
+          });
+        }
+      },
+    };
+  };
+
   const exportPdf = async (
     content?: HTMLElement | string | HTMLElement[],
     filename = "print-design.pdf",
   ) => {
+    let reachedComplete = false;
+    const ticker = createProgressTicker({
+      phase: "pdf",
+      message: i18n.global.t("statusBar.progress.rendering"),
+      start: 5,
+      max: 92,
+      step: 2,
+      interval: 100,
+    });
     try {
       const targetContent =
         content ||
         (Array.from(document.querySelectorAll(".print-page")) as HTMLElement[]);
       const pdf = await createPdfDocument(targetContent);
+      ticker.stop({
+        current: 97,
+        message: i18n.global.t("statusBar.progress.saving"),
+      });
       pdf.save(filename);
+      store.setPrintProgress({
+        phase: "pdf",
+        current: 100,
+        total: 100,
+        message: i18n.global.t("statusBar.progress.saving"),
+      });
+      reachedComplete = true;
     } catch (error) {
+      ticker.stop();
       console.error("Export PDF failed", error);
       toast.error(i18n.global.t("toast.exportPdfFailed"));
+    } finally {
+      ticker.stop();
+      if (reachedComplete) {
+        // Keep 100% visible briefly so the user can perceive completion.
+        await new Promise((resolve) => setTimeout(resolve, 240));
+      }
+      store.setPrintProgress(null);
     }
   };
 
@@ -211,9 +282,21 @@ export const usePrint = () => {
     filename = "print-design.html",
   ) => {
     try {
+      store.setPrintProgress({
+        phase: "html",
+        current: 0,
+        total: 1,
+        message: i18n.global.t("statusBar.progress.preparing"),
+      });
       const targetContent =
         content ||
         (Array.from(document.querySelectorAll(".print-page")) as HTMLElement[]);
+      store.setPrintProgress({
+        phase: "html",
+        current: 1,
+        total: 1,
+        message: i18n.global.t("statusBar.progress.rendering"),
+      });
       const html = await getPrintHtml(targetContent as HTMLElement[]);
 
       const fullHtml = `<!DOCTYPE html>
@@ -251,6 +334,8 @@ export const usePrint = () => {
     } catch (error) {
       console.error("Export HTML failed", error);
       toast.error("Export HTML failed");
+    } finally {
+      store.setPrintProgress(null);
     }
   };
 
@@ -259,7 +344,9 @@ export const usePrint = () => {
   ) => {
     const restoreViewport = lockViewportScroll(!isShadowDomContent(content));
     try {
+      store.setPrintProgress({ phase: "print", current: 0, total: 1, message: i18n.global.t("statusBar.progress.rendering") });
       const pdf = await createPdfDocument(content);
+      store.setPrintProgress({ phase: "print", current: 1, total: 1, message: i18n.global.t("statusBar.progress.printing") });
       const blob = pdf.output("blob");
       const blobUrl = URL.createObjectURL(blob);
 
@@ -323,6 +410,7 @@ export const usePrint = () => {
       toast.error("Print failed");
       throw error;
     } finally {
+      store.setPrintProgress(null);
       restoreViewport();
     }
   };
@@ -369,6 +457,7 @@ export const usePrint = () => {
     filenamePrefix = "print-design",
   ) => {
     try {
+      store.setPrintProgress({ phase: "images", current: 0, total: 1, message: i18n.global.t("statusBar.progress.preparing") });
       const targetContent =
         content ||
         (Array.from(document.querySelectorAll(".print-page")) as HTMLElement[]);
@@ -387,6 +476,7 @@ export const usePrint = () => {
       const source = await resolveRenderSource(targetContent);
       cleanup = source.cleanup;
 
+      store.setPrintProgress({ phase: "images", current: 0, total: 1, message: i18n.global.t("statusBar.progress.rendering") });
       const { container, tempWrapper } = await processContentForImage(
         source.content,
         width,
@@ -396,9 +486,15 @@ export const usePrint = () => {
       );
 
       try {
-        const pageImages = await generatePageImages(container, width, height);
+        const pageImages = await generatePageImages(container, width, height, {
+          onPageRendered: (current, total) => {
+            store.setPrintProgress({ phase: "images", current, total, message: i18n.global.t("statusBar.progress.renderingPage", { current, total }) });
+          },
+        });
 
         if (pageImages.length === 0) return;
+
+        store.setPrintProgress({ phase: "images", current: pageImages.length, total: pageImages.length, message: i18n.global.t("statusBar.progress.saving") });
 
         if (exportImageMerged.value) {
           const finalImage = await stitchImages(pageImages);
@@ -444,6 +540,8 @@ export const usePrint = () => {
     } catch (error) {
       console.error("Export Images failed", error);
       toast.error("Export Images failed");
+    } finally {
+      store.setPrintProgress(null);
     }
   };
 
@@ -451,6 +549,12 @@ export const usePrint = () => {
     content: HTMLElement | string | HTMLElement[],
   ) => {
     try {
+      store.setPrintProgress({
+        phase: "preview",
+        current: 0,
+        total: 1,
+        message: i18n.global.t("statusBar.progress.preparing"),
+      });
       const targetContent =
         content ||
         (Array.from(document.querySelectorAll(".print-page")) as HTMLElement[]);
@@ -469,6 +573,12 @@ export const usePrint = () => {
       const source = await resolveRenderSource(targetContent);
       cleanup = source.cleanup;
 
+      store.setPrintProgress({
+        phase: "preview",
+        current: 0,
+        total: 1,
+        message: i18n.global.t("statusBar.progress.rendering"),
+      });
       const { container, tempWrapper } = await processContentForImage(
         source.content,
         width,
@@ -478,7 +588,11 @@ export const usePrint = () => {
       );
 
       try {
-        const pageImages = await generatePageImages(container, width, height);
+        const pageImages = await generatePageImages(container, width, height, {
+          onPageRendered: (current, total) => {
+            store.setPrintProgress({ phase: "preview", current, total, message: i18n.global.t("statusBar.progress.renderingPage", { current, total }) });
+          },
+        });
 
         if (pageImages.length === 0) throw new Error("No images generated");
 
@@ -498,16 +612,81 @@ export const usePrint = () => {
     } catch (error) {
       console.error("Get Image Blob failed", error);
       throw error;
+    } finally {
+      store.setPrintProgress(null);
     }
   };
 
-  const getPdfBlob = async (content: HTMLElement | string | HTMLElement[]) => {
+  const getPdfBlob = async (
+    content: HTMLElement | string | HTMLElement[],
+    options: {
+      showProgress?: boolean;
+      phase?: string;
+      message?: string;
+    } = {},
+  ) => {
+    const showProgress = options.showProgress !== false;
+    const phase = options.phase || "preview";
+    const baseMessage =
+      options.message || i18n.global.t("statusBar.progress.rendering");
+    let reachedComplete = false;
+    let ticker: number | ReturnType<typeof setInterval> | null = null;
+
     try {
+      if (showProgress) {
+        let value = 6;
+        store.setPrintProgress({
+          phase,
+          current: value,
+          total: 100,
+          message: baseMessage,
+        });
+        ticker = window.setInterval(() => {
+          value = Math.min(90, value + 3);
+          store.setPrintProgress({
+            phase,
+            current: value,
+            total: 100,
+            message: baseMessage,
+          });
+          if (value >= 90 && ticker !== null) {
+            window.clearInterval(ticker);
+            ticker = null;
+          }
+        }, 120);
+      }
+
       const pdf = await createPdfDocument(content);
+      if (showProgress) {
+        if (ticker !== null) {
+          window.clearInterval(ticker);
+          ticker = null;
+        }
+        store.setPrintProgress({
+          phase,
+          current: 100,
+          total: 100,
+          message: i18n.global.t("statusBar.progress.saving"),
+        });
+        reachedComplete = true;
+      }
       return pdf.output("blob");
     } catch (error) {
+      if (ticker !== null) {
+        window.clearInterval(ticker);
+      }
       console.error("Get PDF Blob failed", error);
       throw error;
+    } finally {
+      if (showProgress) {
+        if (ticker !== null) {
+          window.clearInterval(ticker);
+        }
+        if (reachedComplete) {
+          await new Promise((resolve) => setTimeout(resolve, 180));
+        }
+        store.setPrintProgress(null);
+      }
     }
   };
 
@@ -524,8 +703,11 @@ export const usePrint = () => {
     fetchRemoteClients,
     fetchRemotePrinters,
     submitRemoteTask,
-    getPdfBlob,
+    getPdfBlob: (content) => getPdfBlob(content, { showProgress: false }),
     browserPrint,
+    reportProgress: (progress) => {
+      store.setPrintProgress(progress);
+    },
   });
 
   return {

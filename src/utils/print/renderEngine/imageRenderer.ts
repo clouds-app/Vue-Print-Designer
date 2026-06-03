@@ -620,10 +620,12 @@ export const createImageRenderer = (deps: ImageRendererDeps) => {
     container: HTMLElement,
     width: number,
     height: number,
+    options?: { onPageRendered?: (current: number, total: number) => void },
   ): Promise<string[]> => {
     return generatePageImages(container, width, height, {
       canvasBackground: store.canvasBackground,
       showRenderDebugLogs: store.showRenderDebugLogs,
+      onPageRendered: options?.onPageRendered,
     });
   };
 

@@ -25,6 +25,7 @@ Create a new Vue component in the `src/components/elements/` directory, e.g., `S
 <!-- src/components/elements/StarElement.vue -->
 <script setup lang="ts">
 import type { PrintElement } from "@/types";
+import StarIcon from "@/svg/components/StarIcon.vue";
 
 defineProps<{
   element: PrintElement;
@@ -55,11 +56,10 @@ export const elementPropertiesSchema: ElementPropertiesSchema = {
 
 <template>
   <div class="w-full h-full flex items-center justify-center">
-    <svg viewBox="0 0 24 24" :fill="element.style.color || '#000000'">
-      <path
-        d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
-      />
-    </svg>
+    <StarIcon
+      class="w-6 h-6"
+      :style="{ color: element.style.color || '#000000' }"
+    />
   </div>
 </template>
 ```

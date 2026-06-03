@@ -67,7 +67,7 @@
 | ------------------------------------- | ------------------------------------------------------------ |
 | `print(request)`                      | Execute print                                                |
 | `export(request)`                     | Export PDF/Images/HTML                                       |
-| `getPreviewHtml()`                    | Generate and get HTML preview code                           |
+| `getPreviewHtml(options?)`            | Generate and get HTML preview code                           |
 | `setPrintDefaults(payload)`           | Set default print options                                    |
 | `getPrintQuality()`                   | Get current print quality                                    |
 | `setPrintQuality(quality)`            | Set print quality                                            |
@@ -354,6 +354,9 @@ try {
       pageRange: "1-2",
       orientation: "portrait",
     },
+    onProgress: (progress) => {
+      console.log("Print progress", progress.percent, progress.message);
+    },
   });
   console.log("Print task executed successfully! Return status:", result);
 } catch (error) {
@@ -367,6 +370,7 @@ try {
 | --------- | ---------------------------------- | -------- | ------------------------------------------------- |
 | `mode`    | `'browser' \| 'local' \| 'remote'` | No       | Print mode. If omitted, the default mode is used. |
 | `options` | `PrintOptions`                     | No       | Print options (see "Print Options Detail" below)  |
+| `onProgress` | `(progress: DesignerProgressPayload) => void` | No | Progress callback fired when progress changes. |
 
 **Promise Behavior across different `mode`s:**
 
@@ -379,7 +383,13 @@ try {
 Description: export PDF/images/HTML or return Blob/text.
 
 ```ts
-await el.export({ type: "pdf", filename: "order.pdf" });
+await el.export({
+  type: "pdf",
+  filename: "order.pdf",
+  onProgress: (progress) => {
+    console.log("Export progress", progress.percent, progress.message);
+  },
+});
 await el.export({ type: "images", filenamePrefix: "order" });
 await el.export({ type: "html", filename: "order.html" });
 const pdfBlob = await el.export({ type: "pdfBlob" });
@@ -394,17 +404,39 @@ Parameters:
 | `filename`       | `string`                                                  | No       | PDF/HTML filename     |
 | `filenamePrefix` | `string`                                                  | No       | Image filename prefix |
 | `merged`         | `boolean`                                                 | No       | Merge images or not   |
+| `onProgress`     | `(progress: DesignerProgressPayload) => void`            | No       | Progress callback fired when progress changes. |
 
 ### 3. Generate and Get HTML Preview Code (getPreviewHtml)
 
 Description: Get the current rendered HTML result string of the designer, which can be used for custom preview or rendering.
 
 ```ts
-const htmlStr = await el.getPreviewHtml();
+const htmlStr = await el.getPreviewHtml({
+  onProgress: (progress) => {
+    console.log("Preview progress", progress.percent, progress.message);
+  },
+});
 console.log("Preview HTML:", htmlStr);
 ```
 
+Parameters:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onProgress` | `(progress: DesignerProgressPayload) => void` | No | Progress callback fired when progress changes. |
+
 Returns: `Promise<string>` containing the complete generated HTML string (including styles and page elements).
+
+Progress payload:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `scope` | `'print' \| 'export' \| 'preview'` | API scope for the current operation. |
+| `phase` | `string` | Current phase key (e.g. `preview`/`pdf`/`images`/`print`). |
+| `current` | `number` | Current progress value. |
+| `total` | `number` | Total progress value. |
+| `percent` | `number` | Percentage value from 0 to 100. |
+| `message` | `string` | Human-readable phase message. |
 
 ### 4. Set Default Print Options (setPrintDefaults)
 
@@ -1692,6 +1724,9 @@ el.addEventListener("export", (e) => {});
 el.addEventListener("exported", (e) => {
   const blob = e.detail?.blob;
 });
+el.addEventListener("progress", (e) => {
+  console.log(e.detail?.percent, e.detail?.message);
+});
 el.addEventListener("error", (e) => {
   console.error(e.detail?.scope, e.detail?.error);
 });
@@ -1706,6 +1741,7 @@ Event details:
 | `printed`  | Printing finished   | `{ request }`        |
 | `export`   | Export started      | `{ request }`        |
 | `exported` | Export finished     | `{ request, blob? }` |
+| `progress` | Progress updated    | `DesignerProgressPayload` |
 | `error`    | Print/export failed | `{ scope, error }`   |
 
 ## PrintOptions
