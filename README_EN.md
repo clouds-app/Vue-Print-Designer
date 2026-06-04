@@ -4,7 +4,9 @@
 
 <h1 align="center">Vue Print Designer</h1>
 
-<table width="100%"><tr><td align="center" bgcolor="#e8f4fd"><b>Recent Update:</b>&emsp;Removed 6 heavy third-party packages, first-load bundle size reduced by ~<b>65%</b>; render engine fully rewritten in-house, single-page render time reduced from ~<b>300 ms to 80 ms</b> (−73%); language support expanded 2 → <b>6</b>, auto-detected from the browser.</td></tr></table>
+<p align="center">Visual Print Designer &nbsp;&middot;&nbsp; Labels / Receipts / Forms — All Covered &nbsp;&middot;&nbsp; Silent Print &amp; Cloud Print in One</p>
+
+> **Recent Update:** Removed 6 heavy third-party packages, first-load bundle size reduced by ~**65%**; render engine fully rewritten in-house, single-page render time reduced from ~**300 ms to 80 ms** (−73%); language support expanded 2 → **6**, auto-detected from the browser.
 
 <p align="center">
   <a href="https://gitee.com/theGreatOldFive/vue-print-designer/stargazers"><img src="https://gitee.com/theGreatOldFive/vue-print-designer/badge/star.svg?theme=flat" alt="Gitee stars"></a>
@@ -21,73 +23,111 @@
     <a href="https://github.com/0ldFive/Vue-Print-Designer/blob/master/README.md">中文</a> | English
 </p>
 
+---
+
 Vue Print Designer is a visual print designer for business forms, labels, receipts, and waybills. It supports templating and variables, provides silent printing and cloud printing, and works with multiple export/print pipelines.
 
-<h2>LIVE DEMO: <a href="https://0ldfive.github.io/Vue-Print-Designer/" target="_blank" rel="noopener noreferrer">https://0ldfive.github.io/Vue-Print-Designer/</a></h2>
+**Live Demo:** [https://0ldfive.github.io/Vue-Print-Designer/](https://0ldfive.github.io/Vue-Print-Designer/)
 
+---
+
+## Community
+
+Join our QQ group for usage discussions, integration tips, and troubleshooting. QQ Group: **1038069636**
+
+<img src="./docs/images/qq_group.jpg" alt="Vue Print Designer QQ Group QR Code (1038069636)" width="120" />
+
+---
 
 ## UI Preview
 
-| Designer main view and canvas                                                                                                            | Print preview                                                                                                                       | Print parameter settings                                                                                                               |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/1.png" alt="Designer main view" width="160" /> | <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/2.png" alt="Print preview" width="160" /> | <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/3.png" alt="Print parameters" width="160" /> |
-| **System settings and preferences**                                                                                                   | **Shortcut reference**                                                                                                          | **Advanced table editing**                                                                                                           |
-| <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/4.png" alt="System settings" width="160" /> | <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/5.png" alt="Shortcuts" width="160" /> | <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/6.png" alt="Advanced table" width="160" /> |
+<table width="100%">
+  <tr>
+    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/1.png" alt="Designer main view" height="180" /></td>
+    <td align="center" width="34%"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/2.png" alt="Print preview" height="180" /></td>
+    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/3.png" alt="Print parameter settings" height="180" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Designer main view and canvas</b></td>
+    <td align="center"><b>Print preview</b></td>
+    <td align="center"><b>Print parameter settings</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/4.png" alt="System settings" height="180" /></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/5.png" alt="Shortcut reference" height="180" /></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/6.png" alt="Advanced table editing" height="180" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>System settings and preferences</b></td>
+    <td align="center"><b>Shortcut reference</b></td>
+    <td align="center"><b>Advanced table editing</b></td>
+  </tr>
+</table>
+
+---
+
+## Core Features
+
+- **Visual Design**: Full-featured drag-and-drop designer supporting text / images / tables / barcodes / QR codes / shapes. Includes rulers, grids, and alignment tools.
+- **Smart Pagination**: Automatically handles long table pagination with header/footer repetition. No complex manual logic required — what you see is what you get.
+- **Cross-Framework**: Built on Web Components, zero-dependency compatibility with Vue / React / Angular / native HTML.
+- **Comprehensive Printing**:
+  - **Browser Print**: Native preview and print.
+  - **Export**: Generate PDF and images (merge / split supported).
+  - **Client Print**: Supports **Silent Printing** (direct print without dialogs) and **Cloud Printing** (remote task dispatch).
+- **Enterprise Ready**: Supports custom paper sizes, API data integration, template import/export, and fine-grained print parameter control (printer / copies / duplex / DPI).
+
+---
 
 ## Integration Example
 
-To help developers get started quickly, we provide a complete integration example based on **Vue 3 + Element Plus**. This project demonstrates how to embed the print designer into a real-world business application.
+A complete integration example based on **Vue 3 + Element Plus**, demonstrating how to embed the print designer into a real-world business application.
 
-| Parameter Debugging                                                                                                                           | Designer                                                                                                                                      | Dark Mode                                                                                                                                     |
-| --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/11.png" alt="Integration example 11" width="160" /> | <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/12.png" alt="Integration example 12" width="160" /> | <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/13.png" alt="Integration example 13" width="160" /> |
+<table width="100%">
+  <tr>
+    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/11.png" alt="Parameter debugging" height="180" /></td>
+    <td align="center" width="34%"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/12.png" alt="Designer" height="180" /></td>
+    <td align="center" width="33%"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/13.png" alt="Dark mode" height="180" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Parameter Debugging</b></td>
+    <td align="center"><b>Designer</b></td>
+    <td align="center"><b>Dark Mode</b></td>
+  </tr>
+</table>
 
 - **Repository**: [https://github.com/0ldFive/vue-designer-sample](https://github.com/0ldFive/vue-designer-sample)
 - **Live Demo**: [https://0ldfive.github.io/vue-designer-sample/#/designer](https://0ldfive.github.io/vue-designer-sample/#/designer)
 - **Tech Stack**: Vue 3, TypeScript, Element Plus, Vite
 
-## Community
-
-Join our QQ group for usage discussions, integration tips, and troubleshooting.
-
-- QQ Group: **1038069636**
-
-<p>
-    <img src="./docs/images/qq_group.jpg" alt="Vue Print Designer QQ Group QR Code (1038069636)" width="120" />
-</p>
-
-## Core Features
-
-- **Visual Design**: Full-featured drag-and-drop designer supporting text, images, tables, barcodes, QR codes, and shapes. Includes rulers, grids, and alignment tools.
-- **Smart Pagination**: Automatically handles long table pagination with header/footer repetition. No complex manual logic required—what you see is what you get.
-- **Cross-Framework**: Built on Web Components, zero-dependency compatibility with Vue, React, Angular, and native HTML.
-- **Comprehensive Printing**:
-  - **Browser Print**: Native preview and print.
-  - **Export**: Generate PDF and images (merge/split supported).
-  - **Client Print**: Supports **Silent Printing** (direct print without dialogs) and **Cloud Printing** (remote task dispatch).
-- **Enterprise Ready**: Supports custom paper sizes, API data integration, template import/export, and fine-grained control over print parameters (printer selection, copies, duplex, DPI).
+---
 
 ## Companion Print Client (PrintDot Client)
 
-PrintDot Client is the companion desktop print helper (Wails + Vue) for device discovery, connection management, and job forwarding. It is designed to keep the local print pipeline stable and easy to operate when used with this project.
+PrintDot Client is the companion desktop print helper (Wails + Vue) for device discovery, connection management, and job forwarding. Paired with this project it provides a stable local client print pipeline.
 
-- Platforms: Windows / macOS / Linux
-- Key capabilities: device discovery, stable connection & forwarding queue, lightweight background mode
-- Project: https://github.com/0ldFive/PrintDot-Client
+- **Platforms**: Windows / macOS / Linux
+- **Key capabilities**: Automatic device discovery, stable connection & forwarding queue, lightweight background mode
+- **Project**: [https://github.com/0ldFive/PrintDot-Client](https://github.com/0ldFive/PrintDot-Client)
 
-| Main view - device status & connection                                                                                                   | Settings - preferences & options                                                                                                        |
-| ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/7.png" alt="PrintDot main view" width="140" /> | <img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/8.png" alt="PrintDot settings" width="140" /> |
+<table width="100%">
+  <tr>
+    <td align="center" width="50%"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/7.png" alt="PrintDot main view" height="180" /></td>
+    <td align="center" width="50%"><img src="https://raw.githubusercontent.com/0ldFive/Vue-Print-Designer/master/docs/images/8.png" alt="PrintDot settings" height="180" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Main view - device status &amp; connection</b></td>
+    <td align="center"><b>Settings - preferences &amp; options</b></td>
+  </tr>
+</table>
 
-<p>
-    <a href="https://github.com/0ldFive/PrintDot-Client/releases" target="_blank" rel="noopener noreferrer">⬇ Download PrintDot Client</a>
-</p>
+---
 
 ## Quick Start
 
 ### Option A: Build from Source and Integrate Your API
 
-Best for deep customization.
+Best for teams with deep customization requirements.
 
 #### Requirements
 
@@ -100,17 +140,15 @@ Best for deep customization.
 - Custom elements CRUD: `customElements` in `useDesignerStore`
 - Variables and template data: instance methods `setVariables` / `loadTemplateData`
 
-Custom element extension guide: [docs/en/guide/custom-element.md](https://github.com/0ldFive/Vue-Print-Designer/blob/master/docs/en/guide/custom-element.md)
+Custom element extension guide: [custom-element.md](https://printdot.cc/docs)
 
 ### Option B: npm Package (Web Components) [Learn Web Components](https://developer.mozilla.org/en-US/docs/Web/API/Web_components)
 
-Works with any stack (Vue/React/Angular/Vanilla). Web Components **supports Vue 2** as a custom element, no Vue 2 component adapter required.
+Works with any stack (Vue / React / Angular / Vanilla). Web Components **supports Vue 2** as a custom element — no Vue 2 component adapter required.
 
-Parameters, CRUD, and JSON examples: [docs/en/guide/web-components-guide.md](https://github.com/0ldFive/Vue-Print-Designer/blob/master/docs/en/guide/web-components-guide.md)
+Parameters, CRUD, and JSON examples: [Web Components API Guide](https://printdot.cc/docs)
 
-#### Install dependencies
-
-Install with any package manager:
+#### Install
 
 ```bash
 npm i vue-print-designer
@@ -120,9 +158,7 @@ pnpm add vue-print-designer
 yarn add vue-print-designer
 ```
 
-#### 1) Use the component (Vue 3 / Vite)
-
-Import in the entry file:
+#### 1) Use in Vue 3 / Vite
 
 ```ts
 // main.ts
@@ -130,15 +166,13 @@ import "vue-print-designer";
 import "vue-print-designer/style.css";
 ```
 
-Use the custom element in your template:
-
 ```vue
 <template>
   <print-designer id="designer"></print-designer>
 </template>
 ```
 
-#### 2) Vue 3 Options API: Separate init from usage
+#### 2) Separate init from usage (Vue 3 Options API)
 
 **Designer page (init and editing)**
 
@@ -147,10 +181,8 @@ Use the custom element in your template:
 export default {
   mounted() {
     const el = this.$refs.designerRef as any;
-    // Initialize branding and theme
     el.setBranding({ title: "Business Print Designer", showLogo: true });
     el.setTheme("light");
-    // Initialize templates or variables
     el.loadTemplateData(/* data from your API */);
     el.setVariables({ orderNo: "A001" }, { merge: true });
   },
@@ -162,7 +194,7 @@ export default {
 </template>
 ```
 
-**Business pages (print/export anywhere)**
+**Business pages (print / export anywhere)**
 
 ```ts
 const el = document.querySelector("print-designer") as any;
@@ -170,13 +202,13 @@ const el = document.querySelector("print-designer") as any;
 // Print
 await el.print({ mode: "browser" });
 
-// Export PDF / image / html / blob
+// Export PDF / image / HTML / Blob
 await el.export({ type: "pdf", filename: "order-20240223.pdf" });
 await el.export({ type: "html", filename: "order-20240223.html" });
 const pdfBlob = await el.export({ type: "pdfBlob" });
 ```
 
-#### 3) Event hooks
+#### 3) Event listeners
 
 ```ts
 el.addEventListener("ready", () => {});
@@ -188,6 +220,8 @@ el.addEventListener("error", (e) => {
   console.error(e.detail?.scope, e.detail?.error);
 });
 ```
+
+---
 
 ## Project Structure
 
@@ -214,7 +248,7 @@ src/                      # Project source root
 ├── stores/               # Pinia stores
 ├── types/                # Type declarations
 └── utils/                # Shared utility functions
-    ├── print.ts          # Compatibility export entry (forwarder)
+    ├── print.ts          # Compatibility export entry
     ├── print/            # Print capability main modules
     │   ├── index.ts      # Print module unified exports
     │   ├── usePrint.ts   # Print/export orchestration entry
@@ -230,9 +264,13 @@ src/                      # Project source root
     └── ...               # Other shared utility helpers
 ```
 
+---
+
 ## i18n
 
-Built-in support for 6 languages: Simplified Chinese (zh), Traditional Chinese (zh-Hant), English (en), Japanese (ja), Korean (ko), and German (de). Automatically detected from browser language by default; can also be switched via API.
+Built-in support for 6 languages: Simplified Chinese (zh), Traditional Chinese (zh-Hant), English (en), Japanese (ja), Korean (ko), and German (de). Automatically detected from browser language by default; can also be set via API.
+
+---
 
 ## License
 
