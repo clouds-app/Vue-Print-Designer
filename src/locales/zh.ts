@@ -626,6 +626,8 @@ export default {
     dependencies: "开源依赖",
     package: "依赖包",
     version: "版本",
+    license: "协议",
+    author: "作者",
     type: "类型",
     typeDep: "运行时",
     typeDev: "开发",

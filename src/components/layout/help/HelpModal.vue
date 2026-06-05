@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, inject } from "vue";
+import { ref, watch, onMounted, onUnmounted, inject, nextTick } from "vue";
 import { useI18n } from "@/locales";
 import { useDesignerStore } from "@/stores/designer";
 import startCase from "lodash/startCase";
@@ -23,6 +23,11 @@ const designerStore = useDesignerStore();
 const modalContainer = inject("modal-container", ref<HTMLElement | null>(null));
 
 const activeTab = ref<"shortcuts" | "about">("shortcuts");
+const dependencyHeaderScrollRef = ref<HTMLElement | null>(null);
+const dependencyBodyScrollRef = ref<HTMLElement | null>(null);
+const dependencyHeaderTableRef = ref<HTMLTableElement | null>(null);
+const dependencyBodyTableRef = ref<HTMLTableElement | null>(null);
+const dependencyColumnWidths = ref<string[]>([]);
 
 const close = () => {
   emit("update:show", false);
@@ -70,35 +75,169 @@ const dependencies = [
   url: `https://www.npmjs.com/package/${encodeURIComponent(d.name)}`,
 }));
 
-const descriptions = ref<Record<string, string>>({});
-const descLoading = ref(false);
+type DependencyMeta = {
+  description: string;
+  homepage: string;
+  author: string;
+  license: string;
+};
+
+const dependencyMeta = ref<Record<string, DependencyMeta>>({});
 let _descFetched = false;
+
+const normalizeAuthor = (author: unknown) => {
+  if (!author) return "-";
+  if (typeof author === "string") {
+    const text = author.trim();
+    return text || "-";
+  }
+  if (typeof author === "object") {
+    const name = (author as { name?: unknown }).name;
+    if (typeof name === "string" && name.trim()) {
+      return name.trim();
+    }
+  }
+  return "-";
+};
+
+const normalizeLicense = (license: unknown) => {
+  if (!license) return "-";
+  if (typeof license === "string") {
+    const text = license.trim();
+    return text || "-";
+  }
+  if (typeof license === "object") {
+    const type = (license as { type?: unknown }).type;
+    if (typeof type === "string" && type.trim()) {
+      return type.trim();
+    }
+  }
+  return "-";
+};
+
+const getDependencyDescription = (name: string) => {
+  const meta = dependencyMeta.value[name];
+  if (!meta) return "-";
+  return meta.description || meta.homepage || "-";
+};
+
+const getDependencyAuthor = (name: string) => {
+  const meta = dependencyMeta.value[name];
+  if (!meta) return "-";
+  return meta.author || "-";
+};
+
+const getDependencyLicense = (name: string) => {
+  const meta = dependencyMeta.value[name];
+  if (!meta) return "-";
+  return meta.license || "-";
+};
+
+const getDependencyColumnStyle = (columnIndex: number) => {
+  const width = dependencyColumnWidths.value[columnIndex];
+  if (!width) {
+    return undefined;
+  }
+  return {
+    width,
+    minWidth: width,
+  };
+};
+
+const syncDependencyHeaderScroll = () => {
+  if (!dependencyHeaderScrollRef.value || !dependencyBodyScrollRef.value) {
+    return;
+  }
+  dependencyHeaderScrollRef.value.scrollLeft =
+    dependencyBodyScrollRef.value.scrollLeft;
+};
+
+const syncDependencyColumnWidths = () => {
+  if (!dependencyHeaderTableRef.value || !dependencyBodyTableRef.value) {
+    return;
+  }
+
+  const headerCells = dependencyHeaderTableRef.value.querySelectorAll<HTMLTableCellElement>(
+    "thead th",
+  );
+  const firstBodyRow = dependencyBodyTableRef.value.querySelector("tbody tr");
+
+  if (!firstBodyRow) {
+    dependencyColumnWidths.value = [];
+    return;
+  }
+
+  const bodyCells = firstBodyRow.querySelectorAll<HTMLTableCellElement>("td");
+  if (!bodyCells.length) {
+    dependencyColumnWidths.value = [];
+    return;
+  }
+
+  dependencyColumnWidths.value = Array.from(bodyCells).map((cell, index) => {
+    const bodyWidth = Math.ceil(cell.getBoundingClientRect().width);
+    const headerWidth = Math.ceil(
+      headerCells[index]?.getBoundingClientRect().width ?? 0,
+    );
+    return `${Math.max(bodyWidth, headerWidth)}px`;
+  });
+};
+
+const refreshDependencyTableLayout = () => {
+  dependencyColumnWidths.value = [];
+  void nextTick(() => {
+    syncDependencyColumnWidths();
+    syncDependencyHeaderScroll();
+  });
+};
 
 const fetchDescriptions = async () => {
   if (_descFetched) return;
   _descFetched = true;
-  descLoading.value = true;
   const results = await Promise.allSettled(
     dependencies.map(async (dep) => {
       const res = await fetch(
         `https://cdn.jsdelivr.net/npm/${dep.name}/package.json`,
       );
       const json = await res.json();
-      return { name: dep.name, desc: (json.description as string) || "" };
+      return {
+        name: dep.name,
+        description: (json.description as string) || "",
+        homepage: (json.homepage as string) || "",
+        author: normalizeAuthor(json.author),
+        license: normalizeLicense(json.license),
+      };
     }),
   );
-  const map: Record<string, string> = {};
-  for (const r of results) {
-    if (r.status === "fulfilled") map[r.value.name] = r.value.desc;
+  const map: Record<string, DependencyMeta> = {};
+  for (const dep of dependencies) {
+    map[dep.name] = {
+      description: "",
+      homepage: "",
+      author: "-",
+      license: "-",
+    };
   }
-  descriptions.value = map;
-  descLoading.value = false;
+  for (const r of results) {
+    if (r.status === "fulfilled") {
+      map[r.value.name] = {
+        description: r.value.description,
+        homepage: r.value.homepage,
+        author: r.value.author,
+        license: r.value.license,
+      };
+    }
+  }
+  dependencyMeta.value = map;
+  refreshDependencyTableLayout();
 };
 
 watch(
   [() => props.show, activeTab],
   ([visible, tab]) => {
-    if (visible && tab === "about") fetchDescriptions();
+    if (visible && tab === "about") {
+      void fetchDescriptions();
+      refreshDependencyTableLayout();
+    }
   },
   { immediate: true },
 );
@@ -470,32 +609,87 @@ const projectName = startCase(pkg.name);
                   {{ t("help.dependencies") }}
                 </h4>
                 <div
-                  class="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden"
+                  class="bg-gray-50 rounded-lg overflow-hidden"
                 >
-                  <table class="w-full text-xs text-left">
-                    <thead class="bg-gray-100 text-gray-700 font-medium">
-                      <tr>
-                        <th class="px-3 py-2 border-b w-16">
-                          {{ t("help.type") }}
-                        </th>
-                        <th class="px-3 py-2 border-b">
-                          {{ t("help.package") }}
-                        </th>
-                        <th class="px-3 py-2 border-b w-16">
-                          {{ t("help.version") }}
-                        </th>
-                        <th class="px-3 py-2 border-b">
-                          {{ t("help.description") }}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
+                  <div
+                    ref="dependencyHeaderScrollRef"
+                    class="overflow-x-hidden overflow-y-hidden no-scrollbar"
+                    @wheel.prevent.stop
+                  >
+                    <table
+                      ref="dependencyHeaderTableRef"
+                      class="min-w-full w-max text-xs text-left border-collapse"
+                    >
+                      <colgroup>
+                        <col :style="getDependencyColumnStyle(0)" />
+                        <col :style="getDependencyColumnStyle(1)" />
+                        <col :style="getDependencyColumnStyle(2)" />
+                        <col :style="getDependencyColumnStyle(3)" />
+                        <col :style="getDependencyColumnStyle(4)" />
+                        <col :style="getDependencyColumnStyle(5)" />
+                      </colgroup>
+                      <thead class="bg-gray-100 text-gray-700 font-medium">
+                        <tr>
+                          <th class="px-3 py-2 border border-gray-200 sticky left-0 z-30 bg-gray-100 whitespace-nowrap" style="box-shadow: inset -1px 0 0 #e5e7eb;">
+                            {{ t("help.package") }}
+                          </th>
+                          <th class="px-3 py-2 border border-gray-200">
+                            {{ t("help.type") }}
+                          </th>
+                          <th class="px-3 py-2 border border-gray-200">
+                            {{ t("help.version") }}
+                          </th>
+                          <th class="px-3 py-2 border border-gray-200">
+                            {{ t("help.license") }}
+                          </th>
+                          <th class="px-3 py-2 border border-gray-200">
+                            {{ t("help.author") }}
+                          </th>
+                          <th class="px-3 py-2 border border-gray-200">
+                            {{ t("help.description") }}
+                          </th>
+                        </tr>
+                      </thead>
+                    </table>
+                  </div>
+
+                  <div
+                    ref="dependencyBodyScrollRef"
+                    class="max-h-72 overflow-auto"
+                    @scroll="syncDependencyHeaderScroll"
+                  >
+                    <table
+                      ref="dependencyBodyTableRef"
+                      class="min-w-full w-max text-xs text-left border-collapse"
+                    >
+                      <colgroup>
+                        <col :style="getDependencyColumnStyle(0)" />
+                        <col :style="getDependencyColumnStyle(1)" />
+                        <col :style="getDependencyColumnStyle(2)" />
+                        <col :style="getDependencyColumnStyle(3)" />
+                        <col :style="getDependencyColumnStyle(4)" />
+                        <col :style="getDependencyColumnStyle(5)" />
+                      </colgroup>
+                      <tbody class="divide-y divide-gray-200">
                       <tr
                         v-for="dep in dependencies"
                         :key="dep.name"
                         class="hover:bg-gray-50"
                       >
-                        <td class="px-3 py-1">
+                        <td
+                          class="px-3 py-1 border border-gray-200 text-gray-700 font-mono text-[11px] sticky left-0 z-[2] bg-gray-50 whitespace-nowrap"
+                          style="box-shadow: inset -1px 0 0 #e5e7eb;"
+                        >
+                          <a
+                            :href="dep.url"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            :title="dep.url"
+                            class="hover:underline hover:decoration-blue-600 hover:text-blue-600 transition-colors"
+                            >{{ dep.name }}</a
+                          >
+                        </td>
+                        <td class="px-3 py-1 border border-gray-200">
                           <span
                             class="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap"
                             :class="
@@ -514,38 +708,26 @@ const projectName = startCase(pkg.name);
                           </span>
                         </td>
                         <td
-                          class="px-3 py-1 text-gray-700 font-mono text-[11px]"
-                        >
-                          <a
-                            :href="dep.url"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            :title="dep.url"
-                            class="hover:underline hover:decoration-blue-600 hover:text-blue-600 transition-colors"
-                            >{{ dep.name }}</a
-                          >
-                        </td>
-                        <td
-                          class="px-3 py-1 text-gray-500 text-[11px] whitespace-nowrap"
+                          class="px-3 py-1 border border-gray-200 text-gray-500 text-[11px] whitespace-nowrap"
                         >
                           {{ dep.version }}
                         </td>
-                        <td class="px-3 py-1 max-w-0 w-full">
+                        <td class="px-3 py-1 border border-gray-200 text-gray-500 text-[11px] whitespace-nowrap">
+                          {{ getDependencyLicense(dep.name) }}
+                        </td>
+                        <td class="px-3 py-1 border border-gray-200 text-gray-500 text-[11px] whitespace-nowrap">
+                          {{ getDependencyAuthor(dep.name) }}
+                        </td>
+                        <td class="px-3 py-1 border border-gray-200 text-gray-400 text-[11px] whitespace-nowrap">
                           <span
-                            v-if="descLoading && descriptions[dep.name] === undefined"
-                            class="text-gray-300 text-[11px]"
-                            >···</span
-                          >
-                          <span
-                            v-else
-                            class="block truncate text-gray-400 text-[11px]"
-                            :title="descriptions[dep.name]"
-                            >{{ descriptions[dep.name] || "" }}</span
+                            :title="getDependencyDescription(dep.name)"
+                            >{{ getDependencyDescription(dep.name) }}</span
                           >
                         </td>
                       </tr>
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>

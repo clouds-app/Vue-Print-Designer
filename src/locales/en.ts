@@ -642,6 +642,8 @@ export default {
     dependencies: "Open Source Dependencies",
     package: "Package",
     version: "Version",
+    license: "License",
+    author: "Author",
     type: "Type",
     typeDep: "Runtime",
     typeDev: "Dev",

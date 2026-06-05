@@ -626,6 +626,8 @@ export default {
     dependencies: "開源依賴",
     package: "依賴包",
     version: "版本",
+    license: "授權",
+    author: "作者",
     type: "類型",
     typeDep: "執行",
     typeDev: "開發",

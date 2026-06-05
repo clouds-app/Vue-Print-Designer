@@ -641,6 +641,8 @@ export default {
     dependencies: "オープンソース依存関係",
     package: "パッケージ",
     version: "バージョン",
+    license: "ライセンス",
+    author: "作者",
     type: "タイプ",
     typeDep: "本番",
     typeDev: "開発",

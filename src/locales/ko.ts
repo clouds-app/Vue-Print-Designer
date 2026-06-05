@@ -641,6 +641,8 @@ export default {
     dependencies: "오픈소스 의존성",
     package: "패키지",
     version: "버전",
+    license: "라이선스",
+    author: "작성자",
     type: "유형",
     typeDep: "런타임",
     typeDev: "개발",

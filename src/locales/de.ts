@@ -648,6 +648,8 @@ export default {
     dependencies: "Open-Source-Abhängigkeiten",
     package: "Paket",
     version: "Version",
+    license: "Lizenz",
+    author: "Autor",
     type: "Typ",
     typeDep: "Laufzeit",
     typeDev: "Entwicklung",
