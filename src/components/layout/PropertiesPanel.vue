@@ -33,6 +33,10 @@ import Delete from "~icons/material-symbols/delete";
 import FormatAlignLeft from "~icons/material-symbols/format-align-left";
 import FormatAlignCenter from "~icons/material-symbols/format-align-center";
 import FormatAlignRight from "~icons/material-symbols/format-align-right";
+import BringToFrontIcon from "~icons/material-symbols/vertical-align-top";
+import SendToBackIcon from "~icons/material-symbols/vertical-align-bottom";
+import MoveUpIcon from "~icons/material-symbols/arrow-upward";
+import MoveDownIcon from "~icons/material-symbols/arrow-downward";
 import Close from "~icons/material-symbols/close";
 import Help from "~icons/material-symbols/help";
 import InputModal from "@/components/common/InputModal.vue";
@@ -970,30 +974,34 @@ const closePropertiesPanel = () => {
             <button
               @click="handleLayerMove('forward')"
               :disabled="isEditingDisabled || !canMoveLayerUp"
-              class="w-full py-2 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full py-2 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
             >
-              {{ t("properties.action.moveUp") }}
+              <MoveUpIcon class="w-3.5 h-3.5 shrink-0" />
+              <span>{{ t("properties.action.moveUp") }}</span>
             </button>
             <button
               @click="handleLayerMove('backward')"
               :disabled="isEditingDisabled || !canMoveLayerDown"
-              class="w-full py-2 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full py-2 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
             >
-              {{ t("properties.action.moveDown") }}
+              <MoveDownIcon class="w-3.5 h-3.5 shrink-0" />
+              <span>{{ t("properties.action.moveDown") }}</span>
             </button>
             <button
               @click="handleLayerMove('front')"
               :disabled="isEditingDisabled || !canMoveLayerUp"
-              class="w-full py-2 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full py-2 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
             >
-              {{ t("properties.action.bringToFront") }}
+              <BringToFrontIcon class="w-3.5 h-3.5 shrink-0" />
+              <span>{{ t("properties.action.bringToFront") }}</span>
             </button>
             <button
               @click="handleLayerMove('back')"
               :disabled="isEditingDisabled || !canMoveLayerDown"
-              class="w-full py-2 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full py-2 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
             >
-              {{ t("properties.action.sendToBack") }}
+              <SendToBackIcon class="w-3.5 h-3.5 shrink-0" />
+              <span>{{ t("properties.action.sendToBack") }}</span>
             </button>
           </div>
         </div>
